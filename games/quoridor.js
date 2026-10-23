@@ -90,9 +90,9 @@
             display: flex;
             flex-direction: column;
             align-items: center;
-            gap: 10px;
+            gap: 8px;
             width: 100%;
-            max-width: 540px;
+            max-width: 1100px;
             margin: 0 auto;
             user-select: none;
             color: #f1f5f9;
@@ -195,10 +195,10 @@
           .qd-board-container {
             background: #3a1a06;
             border: 6px solid #5a2608;
-            border-radius: 14px;
-            padding: 12px;
+            border-radius: 16px;
+            padding: 14px;
             box-shadow: 0 15px 35px rgba(0, 0, 0, 0.7);
-            width: 100%;
+            width: min(100%, 72vh, 700px);
             display: flex;
             justify-content: center;
             align-items: center;
@@ -207,14 +207,14 @@
           /* 17×17 一体化グリッド盤面 */
           .qd-unified-board {
             display: grid;
-            /* 奇数行/列はマス目(1fr)、偶数行/列は壁スペース(12px) */
+            /* 奇数行/列はマス目(1fr)、偶数行/列は壁スペース(14px) */
             grid-template-columns: repeat(8, 1fr 14px) 1fr;
             grid-template-rows: repeat(8, 1fr 14px) 1fr;
             width: 100%;
             aspect-ratio: 1;
-            max-width: 480px;
+            max-width: 680px;
             background: #210d02;
-            padding: 6px;
+            padding: 8px;
             border-radius: 10px;
             box-shadow: inset 0 3px 8px rgba(0, 0, 0, 0.8);
           }

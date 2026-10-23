@@ -83,32 +83,35 @@
         const style = document.createElement('style');
         style.id = 'quarto-custom-css';
         style.textContent = `
-          .qrt-wrapper { display: flex; flex-direction: column; align-items: center; gap: 10px; width: 100%; max-width: 520px; margin: 0 auto; user-select: none; color: #f1f5f9; }
-          .qrt-status-bar { width: 100%; display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; flex-wrap: wrap; gap: 8px; }
+          .qrt-wrapper { display: grid; grid-template-columns: minmax(320px, min(72vh, 620px)) 1fr; gap: 10px 24px; align-items: start; width: 100%; max-width: 1260px; margin: 0 auto; user-select: none; color: #f1f5f9; }
+          .qrt-status-bar { grid-column: 1 / -1; width: 100%; display: flex; justify-content: space-between; align-items: center; background: #111827; padding: 8px 16px; border-radius: 10px; border: 1px solid #283548; flex-wrap: wrap; gap: 8px; }
           .qrt-turn-group { display: flex; align-items: center; gap: 8px; }
-          .turn-badge { font-size: 13px; font-weight: 700; background: #1e293b; padding: 5px 12px; border-radius: 8px; border: 1px solid #334155; }
-          .qrt-mode-btn { font-size: 11px; font-weight: 700; background: #1e293b; border: 1px solid #3b82f6; color: #38bdf8; padding: 4px 8px; border-radius: 6px; cursor: pointer; }
-          .active-piece-box { font-size: 13px; font-weight: 700; color: #fbbf24; background: #1e293b; padding: 4px 10px; border-radius: 8px; border: 1px solid #334155; display: flex; align-items: center; gap: 6px; }
-          .qrt-board-frame { width: 100%; aspect-ratio: 1; padding: 12px; background: #451a03; border: 6px solid #78350f; border-radius: 16px; box-shadow: 0 14px 34px rgba(0,0,0,0.6); }
-          .qrt-board { width: 100%; height: 100%; background: #271206; display: grid; grid-template-columns: repeat(4, 1fr); grid-template-rows: repeat(4, 1fr); gap: 6px; border: 2px solid #5a2608; border-radius: 8px; padding: 6px; }
-          .qrt-cell { background: #5c2b09; border-radius: 8px; display: flex; justify-content: center; align-items: center; cursor: pointer; transition: all 0.15s; }
-          .qrt-cell:hover:not(.occupied) { background: #78350f; transform: scale(1.04); }
-          .qrt-cell.win-highlight { box-shadow: 0 0 15px #f59e0b, inset 0 0 8px #f59e0b !important; }
-          .qrt-piece { display: flex; justify-content: center; align-items: center; box-shadow: 0 4px 8px rgba(0, 0, 0, 0.4), inset 0 2px 3px rgba(255, 255, 255, 0.3); position: relative; cursor: pointer; transition: transform 0.15s; }
+          .turn-badge { font-size: 14px; font-weight: 700; background: #1e293b; padding: 5px 14px; border-radius: 8px; border: 1px solid #334155; }
+          .qrt-mode-btn { font-size: 12px; font-weight: 700; background: #1e293b; border: 1px solid #3b82f6; color: #38bdf8; padding: 4px 10px; border-radius: 6px; cursor: pointer; }
+          .active-piece-box { font-size: 14px; font-weight: 700; color: #fbbf24; background: #1e293b; padding: 6px 14px; border-radius: 8px; border: 1px solid #334155; display: flex; align-items: center; gap: 8px; }
+          .qrt-board-frame { width: 100%; aspect-ratio: 1; padding: 16px; background: #451a03; border: 6px solid #78350f; border-radius: 18px; box-shadow: 0 16px 38px rgba(0,0,0,0.65); }
+          .qrt-board { width: 100%; height: 100%; background: #271206; display: grid; grid-template-columns: repeat(4, 1fr); grid-template-rows: repeat(4, 1fr); gap: 10px; border: 2px solid #5a2608; border-radius: 10px; padding: 10px; }
+          .qrt-cell { background: #5c2b09; border-radius: 10px; display: flex; justify-content: center; align-items: center; cursor: pointer; transition: all 0.15s; }
+          .qrt-cell:hover:not(.occupied) { background: #78350f; transform: scale(1.03); }
+          .qrt-cell.win-highlight { box-shadow: 0 0 18px #f59e0b, inset 0 0 10px #f59e0b !important; }
+          .qrt-piece { display: flex; justify-content: center; align-items: center; box-shadow: 0 4px 10px rgba(0, 0, 0, 0.45), inset 0 2px 3px rgba(255, 255, 255, 0.3); position: relative; cursor: pointer; transition: transform 0.15s; }
           .qrt-piece:hover { transform: scale(1.1); }
           .qrt-piece.light { background: #fde68a; border: 2px solid #f59e0b; color: #78350f; }
           .qrt-piece.dark { background: #334155; border: 2px solid #1e293b; color: #94a3b8; }
           .qrt-piece.round { border-radius: 50%; }
-          .qrt-piece.square { border-radius: 6px; }
-          .qrt-piece.tall { width: 48px; height: 48px; }
-          .qrt-piece.short { width: 34px; height: 34px; }
+          .qrt-piece.square { border-radius: 8px; }
+          .qrt-piece.tall { width: 64px; height: 64px; }
+          .qrt-piece.short { width: 44px; height: 44px; }
           .qrt-piece.hollow::after { content: ''; width: 40%; height: 40%; background: #0f172a; border-radius: 50%; position: absolute; box-shadow: inset 0 2px 4px rgba(0,0,0,0.8); }
-          .qrt-pool-card { width: 100%; background: #18202c; border: 1px solid #2b384a; border-radius: 10px; padding: 8px 12px; display: flex; flex-direction: column; gap: 6px; }
-          .pool-header { font-size: 12px; font-weight: 700; color: #94a3b8; }
-          .qrt-pool { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; min-height: 55px; }
-          .qrt-pool .qrt-piece.selected { box-shadow: 0 0 14px #38bdf8 !important; transform: scale(1.15); }
-          .qrt-result-banner { margin-top: 10px; display: flex; align-items: center; justify-content: space-between; width: 100%; background: #1e293b; border: 2px solid #10b981; padding: 10px 16px; border-radius: 8px; font-weight: 700; }
+          .qrt-pool-card { width: 100%; background: #18202c; border: 1px solid #2b384a; border-radius: 14px; padding: 18px; display: flex; flex-direction: column; gap: 14px; }
+          .pool-header { font-size: 14px; font-weight: 700; color: #94a3b8; }
+          .qrt-pool { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; justify-items: center; align-items: center; min-height: 180px; }
+          .qrt-pool .qrt-piece.selected { box-shadow: 0 0 16px #38bdf8 !important; transform: scale(1.15); }
+          .qrt-result-banner { grid-column: 1 / -1; margin-top: 6px; display: flex; align-items: center; justify-content: space-between; width: 100%; background: #1e293b; border: 2px solid #10b981; padding: 10px 16px; border-radius: 8px; font-weight: 700; }
           .qrt-result-banner.hidden { display: none; }
+          @media (max-width: 860px) {
+            .qrt-wrapper { display: flex; flex-direction: column; align-items: center; }
+          }
         `;
         document.head.appendChild(style);
       }

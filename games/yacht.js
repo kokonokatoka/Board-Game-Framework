@@ -96,31 +96,34 @@
         const style = document.createElement('style');
         style.id = 'yacht-custom-css';
         style.textContent = `
-          .yct-wrapper { display: flex; flex-direction: column; align-items: center; gap: 10px; width: 100%; max-width: 520px; margin: 0 auto; user-select: none; color: #f1f5f9; }
-          .yct-status-bar { display: flex; justify-content: space-between; align-items: center; width: 100%; background: #111827; padding: 8px 14px; border-radius: 8px; border: 1px solid #283548; flex-wrap: wrap; gap: 8px; }
-          .yct-turn-group { display: flex; align-items: center; gap: 8px; }
-          .turn-badge { font-size: 13px; font-weight: 700; background: #1e293b; padding: 5px 12px; border-radius: 8px; border: 1px solid #334155; }
-          .yct-mode-btn { font-size: 11px; font-weight: 700; background: #1e293b; border: 1px solid #3b82f6; color: #38bdf8; padding: 4px 8px; border-radius: 6px; cursor: pointer; }
-          .yct-rolls-left { font-size: 13px; font-weight: 700; color: #facc15; }
-          .yct-dice-tray { width: 100%; background: #14532d; border: 4px solid #166534; border-radius: 16px; padding: 14px; display: flex; flex-direction: column; align-items: center; gap: 10px; box-shadow: inset 0 4px 10px rgba(0, 0, 0, 0.6), 0 10px 25px rgba(0, 0, 0, 0.5); }
-          .dice-container { display: flex; gap: 10px; justify-content: center; min-height: 65px; align-items: center; }
-          .yct-die { width: 54px; height: 54px; background: #f8fafc; color: #0f172a; border-radius: 12px; box-shadow: 0 5px 10px rgba(0, 0, 0, 0.4), inset 0 2px 4px rgba(255, 255, 255, 0.9); display: flex; justify-content: center; align-items: center; font-size: 32px; font-weight: 900; cursor: pointer; transition: all 0.15s ease; position: relative; }
+          .yct-wrapper { display: grid; grid-template-columns: 1fr 1.2fr; gap: 10px 24px; align-items: stretch; width: 100%; max-width: 1320px; margin: 0 auto; user-select: none; color: #f1f5f9; }
+          .yct-status-bar { grid-column: 1 / -1; display: flex; justify-content: space-between; align-items: center; width: 100%; background: #111827; padding: 8px 16px; border-radius: 8px; border: 1px solid #283548; flex-wrap: wrap; gap: 8px; }
+          .yct-turn-group { display: flex; align-items: center; gap: 10px; }
+          .turn-badge { font-size: 14px; font-weight: 700; background: #1e293b; padding: 5px 14px; border-radius: 8px; border: 1px solid #334155; }
+          .yct-mode-btn { font-size: 12px; font-weight: 700; background: #1e293b; border: 1px solid #3b82f6; color: #38bdf8; padding: 4px 10px; border-radius: 6px; cursor: pointer; }
+          .yct-rolls-left { font-size: 15px; font-weight: 700; color: #facc15; }
+          .yct-dice-tray { width: 100%; background: radial-gradient(circle, #15803d 0%, #14532d 85%); border: 6px solid #166534; border-radius: 20px; padding: 28px 20px; display: flex; flex-direction: column; justify-content: center; align-items: center; gap: 22px; box-shadow: inset 0 6px 18px rgba(0, 0, 0, 0.65), 0 12px 28px rgba(0, 0, 0, 0.5); }
+          .dice-container { display: flex; gap: 14px; justify-content: center; min-height: 90px; align-items: center; flex-wrap: wrap; }
+          .yct-die { width: 72px; height: 72px; background: #f8fafc; color: #0f172a; border-radius: 14px; box-shadow: 0 6px 14px rgba(0, 0, 0, 0.45), inset 0 2px 4px rgba(255, 255, 255, 0.9); display: flex; justify-content: center; align-items: center; font-size: 44px; font-weight: 900; cursor: pointer; transition: all 0.15s ease; position: relative; }
           .yct-die:hover { transform: translateY(-4px); }
-          .yct-die.kept { border: 3px solid #f59e0b; box-shadow: 0 0 14px rgba(245, 158, 11, 0.8); transform: translateY(-8px); }
-          .yct-die.kept::after { content: 'KEEP'; position: absolute; bottom: -18px; font-size: 10px; font-weight: 800; color: #f59e0b; }
-          .keep-guide { font-size: 11px; color: #86efac; }
-          .yct-score-sheet-card { width: 100%; background: #18202c; border: 1px solid #2b384a; border-radius: 12px; overflow: hidden; }
-          .yct-score-table { width: 100%; border-collapse: collapse; font-size: 12px; }
-          .yct-score-table th, .yct-score-table td { padding: 5px 10px; text-align: center; border-bottom: 1px solid #283548; }
+          .yct-die.kept { border: 3px solid #f59e0b; box-shadow: 0 0 16px rgba(245, 158, 11, 0.85); transform: translateY(-10px); }
+          .yct-die.kept::after { content: 'KEEP'; position: absolute; bottom: -20px; font-size: 11px; font-weight: 800; color: #f59e0b; }
+          .keep-guide { font-size: 13px; color: #86efac; }
+          .yct-score-sheet-card { width: 100%; background: #18202c; border: 1px solid #2b384a; border-radius: 14px; overflow: hidden; }
+          .yct-score-table { width: 100%; border-collapse: collapse; font-size: 14px; }
+          .yct-score-table th, .yct-score-table td { padding: 7px 14px; text-align: center; border-bottom: 1px solid #283548; }
           .yct-score-table th:first-child, .yct-score-table td:first-child { text-align: left; font-weight: 700; }
           .p1-header { color: #38bdf8; }
           .p2-header { color: #f87171; }
           .score-cell.selectable { cursor: pointer; background: rgba(56, 189, 248, 0.15); color: #facc15; font-weight: 800; border-radius: 4px; transition: background 0.15s; }
           .score-cell.selectable:hover { background: rgba(250, 204, 21, 0.35); }
-          .total-row { background: #0f172a; font-size: 14px; font-weight: 900; }
-          .total-row td { border-bottom: none; }
-          .yct-result-banner { margin-top: 10px; display: flex; align-items: center; justify-content: space-between; width: 100%; background: #1e293b; border: 2px solid #10b981; padding: 10px 16px; border-radius: 8px; font-weight: 700; }
+          .total-row { background: #0f172a; font-size: 16px; font-weight: 900; }
+          .total-row td { border-bottom: none; padding: 10px 14px; }
+          .yct-result-banner { grid-column: 1 / -1; margin-top: 6px; display: flex; align-items: center; justify-content: space-between; width: 100%; background: #1e293b; border: 2px solid #10b981; padding: 10px 16px; border-radius: 8px; font-weight: 700; }
           .yct-result-banner.hidden { display: none; }
+          @media (max-width: 860px) {
+            .yct-wrapper { display: flex; flex-direction: column; }
+          }
         `;
         document.head.appendChild(style);
       }

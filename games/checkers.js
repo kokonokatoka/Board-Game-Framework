@@ -58,13 +58,13 @@
         const style = document.createElement('style');
         style.id = 'checkers-custom-css';
         style.textContent = `
-          .chk-wrapper { display: flex; flex-direction: column; align-items: center; gap: 10px; width: 100%; max-width: 500px; margin: 0 auto; user-select: none; color: #f1f5f9; }
-          .chk-status-bar { display: flex; justify-content: space-between; align-items: center; width: 100%; background: #111827; padding: 8px 14px; border-radius: 8px; border: 1px solid #283548; flex-wrap: wrap; gap: 8px; }
+          .chk-wrapper { display: flex; flex-direction: column; align-items: center; gap: 8px; width: 100%; max-width: 1000px; margin: 0 auto; user-select: none; color: #f1f5f9; }
+          .chk-status-bar { display: flex; justify-content: space-between; align-items: center; width: min(100%, 74vh, 720px); background: #111827; padding: 6px 14px; border-radius: 8px; border: 1px solid #283548; flex-wrap: wrap; gap: 8px; }
           .chk-turn-group { display: flex; align-items: center; gap: 8px; }
-          .turn-badge { font-size: 13px; font-weight: 700; background: #1e293b; padding: 5px 12px; border-radius: 8px; border: 1px solid #334155; }
-          .chk-mode-btn { font-size: 11px; font-weight: 700; background: #1e293b; border: 1px solid #3b82f6; color: #38bdf8; padding: 4px 8px; border-radius: 6px; cursor: pointer; }
-          .chk-piece-counter { font-size: 13px; font-weight: 700; color: #f59e0b; }
-          .chk-board-frame { background: #451a03; border: 6px solid #78350f; border-radius: 12px; padding: 10px; box-shadow: 0 12px 24px rgba(0, 0, 0, 0.6); width: 100%; }
+          .turn-badge { font-size: 14px; font-weight: 700; background: #1e293b; padding: 5px 14px; border-radius: 8px; border: 1px solid #334155; }
+          .chk-mode-btn { font-size: 12px; font-weight: 700; background: #1e293b; border: 1px solid #3b82f6; color: #38bdf8; padding: 4px 10px; border-radius: 6px; cursor: pointer; }
+          .chk-piece-counter { font-size: 14px; font-weight: 700; color: #f59e0b; }
+          .chk-board-frame { background: #451a03; border: 6px solid #78350f; border-radius: 14px; padding: 12px; box-shadow: 0 14px 34px rgba(0, 0, 0, 0.65); width: min(100%, 74vh, 720px); }
           .chk-board { display: grid; grid-template-columns: repeat(8, 1fr); grid-template-rows: repeat(8, 1fr); aspect-ratio: 1; border: 2px solid #271206; border-radius: 6px; overflow: hidden; }
           .chk-cell { display: flex; justify-content: center; align-items: center; cursor: pointer; position: relative; }
           .chk-cell.light { background: #fde047; }
@@ -72,11 +72,11 @@
           .chk-cell.selected { background: #b45309 !important; box-shadow: inset 0 0 10px #facc15; }
           .chk-cell.valid-move::after { content: ''; width: 26%; height: 26%; background: #22c55e; border-radius: 50%; box-shadow: 0 0 8px #4ade80; animation: pulseValid 0.8s infinite alternate; }
           @keyframes pulseValid { 0% { transform: scale(0.85); } 100% { transform: scale(1.2); } }
-          .chk-piece { width: 80%; height: 80%; border-radius: 50%; display: flex; justify-content: center; align-items: center; font-size: 18px; box-shadow: 0 4px 8px rgba(0, 0, 0, 0.5), inset 0 2px 4px rgba(255, 255, 255, 0.5); cursor: pointer; transition: transform 0.15s; }
+          .chk-piece { width: 80%; height: 80%; border-radius: 50%; display: flex; justify-content: center; align-items: center; font-size: 22px; box-shadow: 0 4px 8px rgba(0, 0, 0, 0.5), inset 0 2px 4px rgba(255, 255, 255, 0.5); cursor: pointer; transition: transform 0.15s; }
           .chk-piece:hover { transform: scale(1.06); }
           .chk-piece.p1 { background: radial-gradient(circle at 35% 35%, #f87171, #dc2626 70%, #991b1b); border: 2px solid #ef4444; }
           .chk-piece.p2 { background: radial-gradient(circle at 35% 35%, #f8fafc, #cbd5e1 70%, #94a3b8); border: 2px solid #e2e8f0; color: #000; }
-          .chk-result-banner { margin-top: 10px; display: flex; justify-content: space-between; align-items: center; width: 100%; background: #1e293b; border: 2px solid #10b981; padding: 10px 16px; border-radius: 8px; font-weight: 700; }
+          .chk-result-banner { margin-top: 6px; display: flex; justify-content: space-between; align-items: center; width: min(100%, 74vh, 720px); background: #1e293b; border: 2px solid #10b981; padding: 10px 16px; border-radius: 8px; font-weight: 700; }
           .chk-result-banner.hidden { display: none; }
         `;
         document.head.appendChild(style);

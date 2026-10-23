@@ -80,17 +80,17 @@
         const style = document.createElement('style');
         style.id = 'othello-custom-css';
         style.textContent = `
-          .othello-wrapper { display: flex; flex-direction: column; align-items: center; width: 100%; max-width: 480px; margin: 0 auto; }
-          .othello-status-bar { width: 100%; display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; flex-wrap: wrap; gap: 8px; }
+          .othello-wrapper { display: flex; flex-direction: column; align-items: center; width: 100%; max-width: 1000px; margin: 0 auto; gap: 8px; }
+          .othello-status-bar { width: min(100%, 74vh, 720px); display: flex; justify-content: space-between; align-items: center; background: #111827; padding: 6px 14px; border-radius: 10px; border: 1px solid #283548; flex-wrap: wrap; gap: 8px; }
           .othello-turn-group { display: flex; align-items: center; gap: 8px; }
-          .turn-badge { font-size: 13px; font-weight: 700; background: #1e293b; padding: 5px 12px; border-radius: 10px; border: 1px solid #334155; }
-          .oth-mode-btn { font-size: 11px; font-weight: 700; background: #1e293b; border: 1px solid #3b82f6; color: #38bdf8; padding: 4px 8px; border-radius: 6px; cursor: pointer; }
-          .othello-score { display: flex; gap: 8px; font-weight: 800; font-size: 14px; align-items: center; }
-          .sc-item { padding: 4px 8px; border-radius: 8px; }
+          .turn-badge { font-size: 14px; font-weight: 700; background: #1e293b; padding: 5px 14px; border-radius: 10px; border: 1px solid #334155; }
+          .oth-mode-btn { font-size: 12px; font-weight: 700; background: #1e293b; border: 1px solid #3b82f6; color: #38bdf8; padding: 4px 10px; border-radius: 6px; cursor: pointer; }
+          .othello-score { display: flex; gap: 8px; font-weight: 800; font-size: 15px; align-items: center; }
+          .sc-item { padding: 4px 10px; border-radius: 8px; }
           .sc-item.black { background: #000; color: #fff; border: 1px solid #333; }
           .sc-item.white { background: #fff; color: #000; }
           .sc-vs { color: #64748b; font-size: 12px; }
-          .othello-board-frame { width: 100%; aspect-ratio: 1/1; padding: 10px; background: #3e2723; border-radius: 12px; box-shadow: 0 12px 30px rgba(0,0,0,0.6); }
+          .othello-board-frame { width: min(100%, 74vh, 720px); aspect-ratio: 1/1; padding: 12px; background: #3e2723; border-radius: 14px; box-shadow: 0 14px 34px rgba(0,0,0,0.65); }
           .othello-grid { width: 100%; height: 100%; background: #1b5e20; display: grid; grid-template-columns: repeat(8, 1fr); grid-template-rows: repeat(8, 1fr); gap: 2px; border: 2px solid #000; }
           .oth-cell { background: #2e7d32; display: flex; justify-content: center; align-items: center; cursor: pointer; position: relative; }
           .oth-cell:hover { background: #388e3c; }
@@ -98,7 +98,8 @@
           .oth-piece { width: 84%; height: 84%; border-radius: 50%; transition: transform 0.25s; }
           .oth-piece.b { background: radial-gradient(circle at 35% 35%, #444, #000); box-shadow: 0 3px 6px rgba(0,0,0,0.6); }
           .oth-piece.w { background: radial-gradient(circle at 35% 35%, #fff, #cbd5e1); box-shadow: 0 3px 6px rgba(0,0,0,0.4); }
-          .othello-result-banner { margin-top: 14px; background: #1e293b; border: 1px solid #10b981; padding: 10px 20px; border-radius: 12px; display: flex; gap: 14px; align-items: center; font-weight: 700; color: #10b981; }
+          .othello-result-banner { width: min(100%, 74vh, 720px); margin-top: 6px; background: #1e293b; border: 1px solid #10b981; padding: 10px 20px; border-radius: 12px; display: flex; justify-content: space-between; gap: 14px; align-items: center; font-weight: 700; color: #10b981; }
+          .othello-result-banner.hidden { display: none; }
         `;
         document.head.appendChild(style);
       }

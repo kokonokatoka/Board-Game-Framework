@@ -62,30 +62,30 @@
         const style = document.createElement('style');
         style.id = 'dab-custom-css';
         style.textContent = `
-          .dab-wrapper { display: flex; flex-direction: column; align-items: center; gap: 10px; width: 100%; max-width: 480px; margin: 0 auto; user-select: none; color: #f1f5f9; }
-          .dab-status-bar { display: flex; justify-content: space-between; align-items: center; width: 100%; background: #111827; padding: 8px 14px; border-radius: 8px; border: 1px solid #283548; flex-wrap: wrap; gap: 8px; }
+          .dab-wrapper { display: flex; flex-direction: column; align-items: center; gap: 8px; width: 100%; max-width: 1000px; margin: 0 auto; user-select: none; color: #f1f5f9; }
+          .dab-status-bar { display: flex; justify-content: space-between; align-items: center; width: min(100%, 74vh, 700px); background: #111827; padding: 6px 14px; border-radius: 8px; border: 1px solid #283548; flex-wrap: wrap; gap: 8px; }
           .dab-turn-group { display: flex; align-items: center; gap: 8px; }
-          .turn-badge { font-size: 13px; font-weight: 700; background: #1e293b; padding: 5px 12px; border-radius: 8px; border: 1px solid #334155; }
-          .dab-mode-btn { font-size: 11px; font-weight: 700; background: #1e293b; border: 1px solid #3b82f6; color: #38bdf8; padding: 4px 8px; border-radius: 6px; cursor: pointer; }
-          .dab-score-board { display: flex; gap: 8px; }
-          .score-pill { font-size: 13px; font-weight: 700; padding: 3px 8px; border-radius: 6px; background: #0f172a; }
+          .turn-badge { font-size: 14px; font-weight: 700; background: #1e293b; padding: 5px 14px; border-radius: 8px; border: 1px solid #334155; }
+          .dab-mode-btn { font-size: 12px; font-weight: 700; background: #1e293b; border: 1px solid #3b82f6; color: #38bdf8; padding: 4px 10px; border-radius: 6px; cursor: pointer; }
+          .dab-score-board { display: flex; gap: 10px; }
+          .score-pill { font-size: 14px; font-weight: 700; padding: 4px 10px; border-radius: 6px; background: #0f172a; }
           .score-pill.p1-pill { color: #38bdf8; border: 1px solid #0284c7; }
           .score-pill.p2-pill { color: #f87171; border: 1px solid #dc2626; }
-          .dab-board-frame { width: 100%; aspect-ratio: 1; padding: 16px; background: #1e293b; border: 4px solid #334155; border-radius: 16px; box-shadow: 0 14px 34px rgba(0, 0, 0, 0.6); display: flex; justify-content: center; align-items: center; }
-          .dab-board { display: grid; grid-template-columns: repeat(4, 18px 1fr) 18px; grid-template-rows: repeat(4, 18px 1fr) 18px; width: 100%; height: 100%; max-width: 420px; max-height: 420px; }
-          .dab-dot { background: #cbd5e1; border-radius: 50%; width: 14px; height: 14px; margin: auto; box-shadow: 0 0 6px rgba(255, 255, 255, 0.6); }
-          .dab-edge-h { height: 12px; margin: auto 0; cursor: pointer; border-radius: 4px; transition: background 0.15s; background: rgba(255, 255, 255, 0.08); }
+          .dab-board-frame { width: min(100%, 74vh, 700px); aspect-ratio: 1; padding: 24px; background: #1e293b; border: 4px solid #334155; border-radius: 18px; box-shadow: 0 16px 38px rgba(0, 0, 0, 0.65); display: flex; justify-content: center; align-items: center; }
+          .dab-board { display: grid; grid-template-columns: repeat(4, 22px 1fr) 22px; grid-template-rows: repeat(4, 22px 1fr) 22px; width: 100%; height: 100%; max-width: 640px; max-height: 640px; }
+          .dab-dot { background: #cbd5e1; border-radius: 50%; width: 18px; height: 18px; margin: auto; box-shadow: 0 0 8px rgba(255, 255, 255, 0.6); }
+          .dab-edge-h { height: 16px; margin: auto 0; cursor: pointer; border-radius: 5px; transition: background 0.15s; background: rgba(255, 255, 255, 0.08); }
           .dab-edge-h:hover:not(.drawn) { background: rgba(56, 189, 248, 0.45); }
-          .dab-edge-h.drawn.p1 { background: #38bdf8; box-shadow: 0 0 8px #0284c7; }
-          .dab-edge-h.drawn.p2 { background: #f87171; box-shadow: 0 0 8px #dc2626; }
-          .dab-edge-v { width: 12px; margin: 0 auto; cursor: pointer; border-radius: 4px; transition: background 0.15s; background: rgba(255, 255, 255, 0.08); }
+          .dab-edge-h.drawn.p1 { background: #38bdf8; box-shadow: 0 0 10px #0284c7; }
+          .dab-edge-h.drawn.p2 { background: #f87171; box-shadow: 0 0 10px #dc2626; }
+          .dab-edge-v { width: 16px; margin: 0 auto; cursor: pointer; border-radius: 5px; transition: background 0.15s; background: rgba(255, 255, 255, 0.08); }
           .dab-edge-v:hover:not(.drawn) { background: rgba(56, 189, 248, 0.45); }
-          .dab-edge-v.drawn.p1 { background: #38bdf8; box-shadow: 0 0 8px #0284c7; }
-          .dab-edge-v.drawn.p2 { background: #f87171; box-shadow: 0 0 8px #dc2626; }
-          .dab-box { display: flex; justify-content: center; align-items: center; font-size: 20px; font-weight: 800; border-radius: 6px; transition: background 0.3s; }
+          .dab-edge-v.drawn.p1 { background: #38bdf8; box-shadow: 0 0 10px #0284c7; }
+          .dab-edge-v.drawn.p2 { background: #f87171; box-shadow: 0 0 10px #dc2626; }
+          .dab-box { display: flex; justify-content: center; align-items: center; font-size: 28px; font-weight: 800; border-radius: 8px; transition: background 0.3s; }
           .dab-box.p1 { background: rgba(56, 189, 248, 0.35); color: #38bdf8; border: 1px solid rgba(56, 189, 248, 0.6); }
           .dab-box.p2 { background: rgba(248, 113, 113, 0.35); color: #f87171; border: 1px solid rgba(248, 113, 113, 0.6); }
-          .dab-result-banner { margin-top: 10px; display: flex; align-items: center; justify-content: space-between; width: 100%; background: #1e293b; border: 2px solid #10b981; padding: 10px 16px; border-radius: 8px; font-weight: 700; }
+          .dab-result-banner { margin-top: 6px; display: flex; align-items: center; justify-content: space-between; width: min(100%, 74vh, 700px); background: #1e293b; border: 2px solid #10b981; padding: 10px 16px; border-radius: 8px; font-weight: 700; }
           .dab-result-banner.hidden { display: none; }
         `;
         document.head.appendChild(style);

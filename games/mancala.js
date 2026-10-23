@@ -96,31 +96,31 @@
         const style = document.createElement('style');
         style.id = 'mancala-custom-css';
         style.textContent = `
-          .mancala-wrapper { display: flex; flex-direction: column; align-items: center; gap: 10px; width: 100%; max-width: 620px; margin: 0 auto; user-select: none; color: #f1f5f9; }
-          .mancala-status-bar { display: flex; justify-content: space-between; align-items: center; width: 100%; background: #111827; padding: 8px 14px; border-radius: 8px; border: 1px solid #283548; flex-wrap: wrap; gap: 8px; }
-          .mancala-turn-group { display: flex; align-items: center; gap: 8px; }
-          .turn-badge { font-size: 13px; font-weight: 700; background: #1e293b; padding: 5px 12px; border-radius: 8px; border: 1px solid #334155; }
-          .mancala-mode-btn { font-size: 11px; font-weight: 700; background: #1e293b; border: 1px solid #3b82f6; color: #38bdf8; padding: 4px 8px; border-radius: 6px; cursor: pointer; }
-          .mancala-hint { font-size: 12px; color: #94a3b8; }
-          .mancala-board-frame { display: flex; align-items: center; justify-content: space-between; width: 100%; background: #451a03; border: 6px solid #78350f; border-radius: 20px; padding: 14px 10px; box-shadow: 0 16px 36px rgba(0, 0, 0, 0.6); gap: 10px; }
-          .mancala-store { width: 62px; height: 170px; background: #271206; border-radius: 30px; box-shadow: inset 0 6px 12px rgba(0, 0, 0, 0.8), 0 2px 4px rgba(255, 255, 255, 0.1); display: flex; flex-direction: column; align-items: center; justify-content: space-between; padding: 10px 4px; }
-          .p1-store { border: 2px solid #f59e0b; }
-          .p2-store { border: 2px solid #38bdf8; }
-          .store-label { font-size: 10px; font-weight: 700; color: #94a3b8; text-align: center; }
-          .pit-count { font-size: 15px; font-weight: 800; color: #fbbf24; }
-          .mancala-center-pits { display: flex; flex-direction: column; gap: 10px; flex: 1; }
-          .pits-row { display: grid; grid-template-columns: repeat(6, 1fr); gap: 6px; }
-          .mancala-pit { aspect-ratio: 1; background: #271206; border-radius: 50%; box-shadow: inset 0 4px 8px rgba(0, 0, 0, 0.8), 0 1px 2px rgba(255, 255, 255, 0.1); display: flex; flex-direction: column; align-items: center; justify-content: space-between; padding: 5px; cursor: default; transition: transform 0.15s, box-shadow 0.15s; }
+          .mancala-wrapper { display: flex; flex-direction: column; align-items: center; gap: 12px; width: 100%; max-width: 1280px; margin: 0 auto; user-select: none; color: #f1f5f9; }
+          .mancala-status-bar { display: flex; justify-content: space-between; align-items: center; width: 100%; background: #111827; padding: 8px 16px; border-radius: 8px; border: 1px solid #283548; flex-wrap: wrap; gap: 8px; }
+          .mancala-turn-group { display: flex; align-items: center; gap: 10px; }
+          .turn-badge { font-size: 15px; font-weight: 700; background: #1e293b; padding: 6px 14px; border-radius: 8px; border: 1px solid #334155; }
+          .mancala-mode-btn { font-size: 12px; font-weight: 700; background: #1e293b; border: 1px solid #3b82f6; color: #38bdf8; padding: 5px 10px; border-radius: 6px; cursor: pointer; }
+          .mancala-hint { font-size: 13px; color: #94a3b8; }
+          .mancala-board-frame { display: flex; align-items: stretch; justify-content: space-between; width: 100%; min-height: clamp(240px, 42vh, 380px); background: #451a03; border: 8px solid #78350f; border-radius: 28px; padding: 20px 18px; box-shadow: 0 20px 44px rgba(0, 0, 0, 0.65); gap: 18px; }
+          .mancala-store { width: clamp(80px, 10vw, 130px); background: #271206; border-radius: 40px; box-shadow: inset 0 8px 16px rgba(0, 0, 0, 0.85), 0 2px 4px rgba(255, 255, 255, 0.1); display: flex; flex-direction: column; align-items: center; justify-content: space-between; padding: 14px 8px; }
+          .p1-store { border: 3px solid #f59e0b; }
+          .p2-store { border: 3px solid #38bdf8; }
+          .store-label { font-size: 12px; font-weight: 700; color: #94a3b8; text-align: center; }
+          .pit-count { font-size: clamp(18px, 2vw, 24px); font-weight: 800; color: #fbbf24; }
+          .mancala-center-pits { display: flex; flex-direction: column; justify-content: space-between; gap: 16px; flex: 1; }
+          .pits-row { display: grid; grid-template-columns: repeat(6, 1fr); gap: clamp(8px, 1.4vw, 18px); flex: 1; }
+          .mancala-pit { aspect-ratio: 1; max-height: 160px; width: 100%; background: #271206; border-radius: 50%; box-shadow: inset 0 6px 12px rgba(0, 0, 0, 0.85), 0 1px 2px rgba(255, 255, 255, 0.1); display: flex; flex-direction: column; align-items: center; justify-content: space-between; padding: 8px; cursor: default; transition: transform 0.15s, box-shadow 0.15s; margin: auto; }
           .mancala-pit.selectable { cursor: pointer; border: 2px solid #f59e0b; }
-          .mancala-pit.selectable:hover { transform: scale(1.08); box-shadow: inset 0 5px 10px rgba(0, 0, 0, 0.8), 0 0 12px #f59e0b; }
-          .stones-container { display: flex; flex-wrap: wrap; justify-content: center; align-content: center; gap: 2px; width: 80%; height: 55%; overflow: hidden; }
-          .stone { width: 8px; height: 8px; border-radius: 50%; box-shadow: 0 1px 3px rgba(0,0,0,0.5), inset 0 1px 1px rgba(255,255,255,0.8); }
+          .mancala-pit.selectable:hover { transform: scale(1.06); box-shadow: inset 0 5px 10px rgba(0, 0, 0, 0.8), 0 0 16px #f59e0b; }
+          .stones-container { display: flex; flex-wrap: wrap; justify-content: center; align-content: center; gap: 4px; width: 82%; height: 60%; overflow: hidden; }
+          .stone { width: clamp(10px, 1.2vw, 16px); height: clamp(10px, 1.2vw, 16px); border-radius: 50%; box-shadow: 0 2px 4px rgba(0,0,0,0.6), inset 0 1px 2px rgba(255,255,255,0.85); }
           .stone.c1 { background: radial-gradient(circle at 30% 30%, #67e8f9, #0284c7); }
           .stone.c2 { background: radial-gradient(circle at 30% 30%, #fca5a5, #dc2626); }
           .stone.c3 { background: radial-gradient(circle at 30% 30%, #fde047, #ca8a04); }
           .stone.c4 { background: radial-gradient(circle at 30% 30%, #86efac, #16a34a); }
           .stone.c5 { background: radial-gradient(circle at 30% 30%, #d8b4fe, #9333ea); }
-          .mancala-result-banner { margin-top: 10px; display: flex; align-items: center; justify-content: space-between; width: 100%; background: #1e293b; border: 2px solid #10b981; padding: 10px 18px; border-radius: 8px; font-weight: 700; }
+          .mancala-result-banner { margin-top: 8px; display: flex; align-items: center; justify-content: space-between; width: 100%; background: #1e293b; border: 2px solid #10b981; padding: 10px 18px; border-radius: 8px; font-weight: 700; }
           .mancala-result-banner.hidden { display: none; }
         `;
         document.head.appendChild(style);

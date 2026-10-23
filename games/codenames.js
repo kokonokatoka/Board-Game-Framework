@@ -171,9 +171,9 @@
           .cn-wrapper {
             display: flex;
             flex-direction: column;
-            gap: 12px;
+            gap: 8px;
             width: 100%;
-            max-width: 900px;
+            max-width: 1480px;
             margin: 0 auto;
             color: #f1f5f9;
           }
@@ -182,30 +182,33 @@
           .cn-header-panel {
             background: #18202c;
             border: 1px solid #2b384a;
-            border-radius: 12px;
-            padding: 12px 16px;
+            border-radius: 10px;
+            padding: 8px 14px;
             display: flex;
-            flex-direction: column;
-            gap: 10px;
+            flex-direction: row;
+            flex-wrap: wrap;
+            justify-content: space-between;
+            align-items: center;
+            gap: 12px;
           }
 
           .cn-team-scores {
             display: flex;
             justify-content: space-between;
             align-items: center;
-            gap: 12px;
+            gap: 10px;
+            flex: 1;
           }
 
           .cn-score-card {
             display: flex;
             align-items: center;
-            gap: 10px;
-            padding: 8px 16px;
-            border-radius: 10px;
+            gap: 8px;
+            padding: 6px 14px;
+            border-radius: 8px;
             background: #111827;
             border: 2px solid transparent;
             transition: all 0.25s ease;
-            flex: 1;
           }
 
           .cn-score-card.red-card {
@@ -229,10 +232,10 @@
 
           .team-name {
             font-weight: 700;
-            font-size: 15px;
+            font-size: 14px;
           }
           .score-count {
-            font-size: 24px;
+            font-size: 20px;
             font-weight: 900;
             font-family: monospace;
           }
@@ -240,10 +243,10 @@
           .blue-card .score-count { color: #60a5fa; }
 
           .cn-turn-indicator {
-            font-size: 14px;
+            font-size: 13px;
             font-weight: 700;
             text-align: center;
-            padding: 6px 14px;
+            padding: 5px 12px;
             border-radius: 20px;
             background: #232d3d;
             border: 1px solid #374151;
@@ -253,12 +256,10 @@
           /* ツールバー */
           .cn-toolbar {
             display: flex;
-            justify-content: space-between;
+            justify-content: flex-end;
             align-items: center;
             gap: 8px;
             flex-wrap: wrap;
-            padding-top: 6px;
-            border-top: 1px solid #283548;
           }
 
           .btn-spymaster {
@@ -277,11 +278,14 @@
           .cn-clue-banner {
             background: #1e293b;
             border: 1px solid #334155;
-            border-radius: 12px;
-            padding: 12px 16px;
+            border-radius: 10px;
+            padding: 8px 14px;
             display: flex;
-            flex-direction: column;
-            gap: 8px;
+            flex-direction: row;
+            flex-wrap: wrap;
+            justify-content: space-between;
+            align-items: center;
+            gap: 10px;
           }
 
           .clue-display-area {
@@ -339,16 +343,16 @@
 
           /* カード単体 */
           .cn-card {
-            aspect-ratio: 16 / 10;
+            min-height: clamp(68px, 10.5vh, 118px);
             background: #e2e8f0;
             color: #0f172a;
-            border-radius: 8px;
+            border-radius: 10px;
             display: flex;
             flex-direction: column;
             justify-content: center;
             align-items: center;
-            padding: 6px 4px;
-            font-size: 15px;
+            padding: 8px 6px;
+            font-size: clamp(16px, 1.8vw, 22px);
             font-weight: 800;
             cursor: pointer;
             box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.8);
@@ -437,11 +441,11 @@
 
           .card-word {
             letter-spacing: 1px;
-            font-size: 14px;
+            font-size: clamp(15px, 1.6vw, 22px);
             line-height: 1.2;
           }
           .card-subtext {
-            font-size: 10px;
+            font-size: 11px;
             opacity: 0.85;
             margin-top: 3px;
           }
@@ -451,8 +455,8 @@
             background: #111827;
             border: 1px solid #1f2937;
             border-radius: 8px;
-            padding: 10px 14px;
-            max-height: 120px;
+            padding: 6px 12px;
+            max-height: 76px;
             overflow-y: auto;
           }
           .log-header {

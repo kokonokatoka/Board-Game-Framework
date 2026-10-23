@@ -109,44 +109,45 @@
       </div>
     </section>
 
-    <!-- 2. ゲームプレイ画面 (ステージ) -->
+    <!-- 2. ゲームプレイ画面 (ステージ：無駄を省きページ幅を最大限活用) -->
     <section id="game-view" class="view-panel">
-      <!-- ゲーム上部バー -->
-      <div class="game-header-bar">
-        <button id="back-to-catalog-btn" class="btn-subtle">◀ ゲーム一覧に戻る</button>
-        <div class="active-game-title" id="active-game-title">ゲーム名</div>
-        <div style="display:flex;gap:6px;"><button id="share-room-btn" class="btn btn-sm btn-primary">📋 招待リンク</button><button id="custom-room-btn" class="btn btn-sm btn-subtle" title="合言葉で専用の別室を作成・参加">🔒 合言葉部屋</button></div>
+      <!-- 統合スリム・トップバー (タイトル・対戦情報・リアクション・招待を1行に集約) -->
+      <div class="game-compact-bar">
+        <div class="gcb-left">
+          <button id="back-to-catalog-btn" class="gcb-back-btn">◀ 一覧へ</button>
+          <div class="active-game-title" id="active-game-title">ゲーム名</div>
+        </div>
+
+        <div class="gcb-center">
+          <div class="player-box p1-box" id="p1-box">
+            <span class="p-name" id="p1-name-display">ホスト</span>
+          </div>
+          <div class="vs-badge" id="match-status-badge">対戦中</div>
+          <div class="player-box p2-box" id="p2-box">
+            <span class="p-name" id="p2-name-display">待機中...</span>
+          </div>
+        </div>
+
+        <div class="gcb-right">
+          <div class="emote-inline-group">
+            <button class="emote-btn" data-msg="よろしくお願いします！" title="よろしく">👋</button>
+            <button class="emote-btn" data-msg="考え中…🤔" title="長考中">🤔</button>
+            <button class="emote-btn" data-msg="ナイス！👏" title="ナイス">👏</button>
+            <button class="emote-btn" data-msg="参りました！🏳️" title="降参">🏳️</button>
+          </div>
+          <button id="share-room-btn" class="btn btn-sm btn-primary" title="招待URLをコピー">📋 招待</button>
+          <button id="custom-room-btn" class="btn btn-sm btn-secondary" title="合言葉で専用の別室を作成・参加">🔒 部屋</button>
+        </div>
       </div>
 
-      <!-- 対戦プレイヤー情報バー -->
-      <div class="players-info-bar">
-        <div class="player-box p1-box" id="p1-box">
-          <span class="p-role">先手 (P1)</span>
-          <span class="p-name" id="p1-name-display">ホスト</span>
-        </div>
-        <div class="vs-badge" id="match-status-badge">対戦中</div>
-        <div class="player-box p2-box" id="p2-box">
-          <span class="p-role">後手 (P2)</span>
-          <span class="p-name" id="p2-name-display">ゲスト待機中...</span>
-        </div>
-      </div>
+      <!-- トースト通知 (画面上にスマートにフロート表示) -->
+      <div id="chat-toast" class="chat-toast hidden"></div>
 
-      <!-- 各ゲームコンポーネントがマウントされる動的領域 -->
+      <!-- 各ゲームコンポーネントがマウントされる動的領域 (ワイド最大化) -->
       <div id="game-mount-point" class="game-mount-point"></div>
-
-      <!-- 共通エモート＆リアクションバー -->
-      <div class="shared-footer-bar">
-        <div class="emote-buttons">
-          <button class="emote-btn" data-msg="よろしくお願いします！">👋 よろしく</button>
-          <button class="emote-btn" data-msg="考え中…🤔">🤔 長考中</button>
-          <button class="emote-btn" data-msg="ナイス！👏">👏 ナイス</button>
-          <button class="emote-btn" data-msg="参りました！🏳️">🏳️ 降参</button>
-        </div>
-        <div id="chat-toast" class="chat-toast hidden"></div>
-      </div>
     </section>
 
-        <!-- AAA ルール解説モーダル -->
+    <!-- AAA ルール解説モーダル -->
     <div id="rule-modal" class="modal-backdrop hidden">
       <div class="modal-card rule-modal-card">
         <div class="modal-header-row">

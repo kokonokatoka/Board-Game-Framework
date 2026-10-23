@@ -62,20 +62,21 @@
         const style = document.createElement('style');
         style.id = 'gomoku-custom-css';
         style.textContent = `
-          .gomoku-wrapper { display: flex; flex-direction: column; align-items: center; width: 100%; max-width: 480px; margin: 0 auto; }
-          .gomoku-status-bar { width: 100%; display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; flex-wrap: wrap; gap: 8px; }
+          .gomoku-wrapper { display: flex; flex-direction: column; align-items: center; width: 100%; max-width: 1000px; margin: 0 auto; gap: 8px; }
+          .gomoku-status-bar { width: min(100%, 74vh, 720px); display: flex; justify-content: space-between; align-items: center; background: #111827; padding: 6px 14px; border-radius: 10px; border: 1px solid #283548; flex-wrap: wrap; gap: 8px; }
           .gomoku-turn-info { display: flex; align-items: center; gap: 8px; }
-          .turn-badge { font-size: 13px; font-weight: 700; background: #1e293b; padding: 5px 12px; border-radius: 10px; border: 1px solid #334155; }
-          .gom-mode-btn { font-size: 11px; font-weight: 700; background: #1e293b; border: 1px solid #3b82f6; color: #38bdf8; padding: 4px 8px; border-radius: 6px; cursor: pointer; }
-          .gomoku-rule { font-size: 12px; color: #94a3b8; font-weight: 600; }
-          .gomoku-board-frame { width: 100%; aspect-ratio: 1/1; padding: 10px; background: #d7ba89; border-radius: 12px; box-shadow: 0 12px 30px rgba(0,0,0,0.6); }
+          .turn-badge { font-size: 14px; font-weight: 700; background: #1e293b; padding: 5px 14px; border-radius: 10px; border: 1px solid #334155; }
+          .gom-mode-btn { font-size: 12px; font-weight: 700; background: #1e293b; border: 1px solid #3b82f6; color: #38bdf8; padding: 4px 10px; border-radius: 6px; cursor: pointer; }
+          .gomoku-rule { font-size: 13px; color: #94a3b8; font-weight: 600; }
+          .gomoku-board-frame { width: min(100%, 74vh, 720px); aspect-ratio: 1/1; padding: 12px; background: #d7ba89; border-radius: 14px; box-shadow: 0 14px 34px rgba(0,0,0,0.65); }
           .gomoku-grid { width: 100%; height: 100%; background: #e0c598; display: grid; grid-template-columns: repeat(11, 1fr); grid-template-rows: repeat(11, 1fr); gap: 1px; border: 2px solid #5c401b; }
           .gom-cell { background: #eed5ab; display: flex; justify-content: center; align-items: center; cursor: pointer; position: relative; }
           .gom-cell:hover { background: #fdf0d5; }
           .gom-piece { width: 84%; height: 84%; border-radius: 50%; box-shadow: 0 3px 6px rgba(0,0,0,0.4); animation: dropIn 0.2s ease; }
           .gom-piece.b { background: radial-gradient(circle at 35% 35%, #444, #000); }
           .gom-piece.w { background: radial-gradient(circle at 35% 35%, #fff, #cbd5e1); }
-          .gomoku-result-banner { margin-top: 14px; background: #1e293b; border: 1px solid #38bdf8; padding: 10px 20px; border-radius: 12px; display: flex; gap: 14px; align-items: center; font-weight: 700; color: #38bdf8; }
+          .gomoku-result-banner { width: min(100%, 74vh, 720px); margin-top: 6px; background: #1e293b; border: 1px solid #38bdf8; padding: 10px 20px; border-radius: 12px; display: flex; justify-content: space-between; gap: 14px; align-items: center; font-weight: 700; color: #38bdf8; }
+          .gomoku-result-banner.hidden { display: none; }
           @keyframes dropIn { from { transform: scale(0.5); } to { transform: scale(1); } }
         `;
         document.head.appendChild(style);

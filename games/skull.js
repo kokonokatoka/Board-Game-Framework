@@ -108,44 +108,39 @@
       // プレイヤー配列 (0 〜 MAX_SEATS-1)
       let players = [];
 
-      // HTML レイアウト構築
+      // HTML レイアウト構築 (無駄なバーを排除し、3Dキャンバス内にHUDとプレイヤー情報を統合)
       container.innerHTML = `
         <div class="skull-pro-wrapper">
-          <!-- 上部ヘッダーバー -->
-          <div class="skull-top-bar">
-            <div class="skull-top-left">
-              <label class="skull-select-wrap">
-                👥 卓の人数:
-                <select id="skull-count-select" class="skull-select">
-                  <option value="2">2人対戦 (1 vs 1)</option>
-                  <option value="3">3人対戦</option>
-                  <option value="4" selected>4人対戦 (定番おすすめ)</option>
-                  <option value="5">5人対戦</option>
-                  <option value="6">6人対戦 (大乱闘)</option>
-                  <option value="7">7人対戦</option>
-                  <option value="8">8人対戦 (フルハウス)</option>
-                </select>
-              </label>
-              <button id="skull-cpu-toggle" class="skull-pill-btn active">🤖 CPU自動進行: ON</button>
-              <button id="skull-cam-btn" class="skull-pill-btn">🎥 視点切替</button>
-            </div>
-            <div class="skull-top-right">
-              <span class="skull-round-badge" id="skull-round-badge">ROUND 1</span>
-              <button id="skull-new-game-btn" class="btn btn-sm btn-subtle">🔄 最初から</button>
-            </div>
-          </div>
-
-          <!-- プレイヤー一覧ステータスバー -->
-          <div class="skull-players-strip" id="skull-players-strip"></div>
-
-          <!-- メイン3Dキャンバス ＆ オーバーレイHUD -->
+          <!-- メイン3Dキャンバス ＆ 統合オーバーレイHUD (ワイド最大領域) -->
           <div class="skull-stage-box" id="skull-3d-stage">
-            <!-- 上部フェーズ＆アナウンスHUD -->
+            <!-- 左上: 卓設定・カメラ・リスタート -->
+            <div class="skull-hud-topleft">
+              <select id="skull-count-select" class="skull-select" title="参加人数切替">
+                <option value="2">👥 2人</option>
+                <option value="3">👥 3人</option>
+                <option value="4" selected>👥 4人 (定番)</option>
+                <option value="5">👥 5人</option>
+                <option value="6">👥 6人</option>
+                <option value="7">👥 7人</option>
+                <option value="8">👥 8人 (最大)</option>
+              </select>
+              <button id="skull-cpu-toggle" class="skull-pill-btn active">🤖 CPU: ON</button>
+              <button id="skull-cam-btn" class="skull-pill-btn">🎥 視点</button>
+              <button id="skull-new-game-btn" class="skull-pill-btn">🔄 リセット</button>
+            </div>
+
+            <!-- 右上: ラウンド ＆ 参加プレイヤー状況ミニバッジ群 -->
+            <div class="skull-hud-topright">
+              <span class="skull-round-badge" id="skull-round-badge">ROUND 1</span>
+              <div class="skull-players-strip" id="skull-players-strip"></div>
+            </div>
+
+            <!-- 中央上部: フェーズ＆アナウンスHUD -->
             <div class="skull-hud-top">
               <div class="skull-phase-pill" id="skull-phase-pill">PHASE 1: 初手セット</div>
               <div class="skull-announce-text" id="skull-announce-text">手札から1枚選んで場に伏せて出してください</div>
               <div class="skull-bid-counter hidden" id="skull-bid-counter">
-                🔥 現在の最高宣言: <strong id="skull-bid-val">0</strong> 枚 (<span id="skull-bidder-name">-</span>)
+                🔥 最高宣言: <strong id="skull-bid-val">0</strong> 枚 (<span id="skull-bidder-name">-</span>)
               </div>
             </div>
 
@@ -163,12 +158,12 @@
             </div>
           </div>
 
-          <!-- 下部プレイヤーズ・コックピット (手札＆アクションパネル) -->
+          <!-- 下部スリム・コックピット (手札＆アクションを1行に凝縮) -->
           <div class="skull-cockpit" id="skull-cockpit">
             <!-- 左: 自分の手札カード選択ボタン群 -->
             <div class="skull-my-hand-panel">
               <div class="panel-header-row">
-                <span class="panel-lbl">🖐️ あなたの手札 (クリックまたは3Dドラッグで場に出す)</span>
+                <span class="panel-lbl">🖐️ あなたの手札</span>
                 <span class="my-wins-stars" id="skull-my-wins">☆☆ (0/2勝)</span>
               </div>
               <div class="skull-hand-cards" id="skull-hand-cards"></div>
@@ -193,124 +188,21 @@
           .skull-pro-wrapper {
             display: flex;
             flex-direction: column;
-            gap: 10px;
+            gap: 8px;
             width: 100%;
-            max-width: 1080px;
+            max-width: 100%;
             margin: 0 auto;
             user-select: none;
             color: #f8fafc;
           }
-          .skull-top-bar {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            background: #111827;
-            border: 1px solid #283548;
-            padding: 8px 14px;
-            border-radius: 12px;
-            flex-wrap: wrap;
-            gap: 8px;
-          }
-          .skull-top-left, .skull-top-right {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            flex-wrap: wrap;
-          }
-          .skull-select-wrap {
-            font-size: 13px;
-            font-weight: 700;
-            color: #fbbf24;
-            display: flex;
-            align-items: center;
-            gap: 6px;
-          }
-          .skull-select {
-            background: #1e293b;
-            color: #fff;
-            border: 1px solid #38bdf8;
-            border-radius: 8px;
-            padding: 4px 10px;
-            font-size: 13px;
-            font-weight: 700;
-            cursor: pointer;
-            outline: none;
-          }
-          .skull-pill-btn {
-            background: #1e293b;
-            border: 1px solid #475569;
-            color: #cbd5e1;
-            font-size: 12px;
-            font-weight: 700;
-            padding: 5px 12px;
-            border-radius: 20px;
-            cursor: pointer;
-            transition: all 0.2s;
-          }
-          .skull-pill-btn:hover { border-color: #38bdf8; color: #fff; }
-          .skull-pill-btn.active {
-            background: rgba(56, 189, 248, 0.15);
-            border-color: #38bdf8;
-            color: #38bdf8;
-          }
-          .skull-round-badge {
-            background: linear-gradient(135deg, #f59e0b, #d97706);
-            color: #fff;
-            font-size: 12px;
-            font-weight: 900;
-            padding: 4px 12px;
-            border-radius: 14px;
-            letter-spacing: 1px;
-          }
 
-          /* プレイヤーストリップ */
-          .skull-players-strip {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
-            gap: 8px;
-            width: 100%;
-          }
-          .sk-p-badge {
-            background: #161f2e;
-            border: 2px solid #283548;
-            border-radius: 10px;
-            padding: 6px 10px;
-            display: flex;
-            flex-direction: column;
-            gap: 3px;
-            position: relative;
-            transition: all 0.25s;
-          }
-          .sk-p-badge.active-turn {
-            border-color: #fbbf24;
-            background: rgba(245, 158, 11, 0.14);
-            box-shadow: 0 0 14px rgba(245, 158, 11, 0.4);
-            transform: translateY(-2px);
-          }
-          .sk-p-badge.passed, .sk-p-badge.eliminated {
-            opacity: 0.45;
-          }
-          .sk-p-top {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            font-size: 12px;
-            font-weight: 800;
-          }
-          .sk-p-stars { color: #fbbf24; font-size: 13px; letter-spacing: 1px; }
-          .sk-p-meta {
-            display: flex;
-            justify-content: space-between;
-            font-size: 11px;
-            color: #94a3b8;
-          }
-          .sk-p-stack { color: #38bdf8; font-weight: 700; }
-
-          /* 3D ステージ */
+          /* 3D ステージ (画面幅＆高さを最大限活用) */
           .skull-stage-box {
             position: relative;
             width: 100%;
-            height: 470px;
+            height: calc(100vh - 220px);
+            min-height: 480px;
+            max-height: 820px;
             background: radial-gradient(circle at center, #111c2d 0%, #050811 100%);
             border: 2px solid #2b3b52;
             border-radius: 16px;
@@ -329,53 +221,155 @@
             display: block;
           }
 
-          /* ステージ上部HUD */
+          /* オーバーレイ左上コントロール */
+          .skull-hud-topleft {
+            position: absolute;
+            top: 10px;
+            left: 12px;
+            z-index: 12;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            flex-wrap: wrap;
+          }
+          .skull-select {
+            background: rgba(15, 23, 42, 0.88);
+            backdrop-filter: blur(6px);
+            color: #fbbf24;
+            border: 1px solid #38bdf8;
+            border-radius: 8px;
+            padding: 4px 8px;
+            font-size: 12px;
+            font-weight: 800;
+            cursor: pointer;
+            outline: none;
+          }
+          .skull-pill-btn {
+            background: rgba(15, 23, 42, 0.88);
+            backdrop-filter: blur(6px);
+            border: 1px solid #475569;
+            color: #cbd5e1;
+            font-size: 11px;
+            font-weight: 700;
+            padding: 4px 10px;
+            border-radius: 16px;
+            cursor: pointer;
+            transition: all 0.2s;
+          }
+          .skull-pill-btn:hover { border-color: #38bdf8; color: #fff; }
+          .skull-pill-btn.active {
+            background: rgba(56, 189, 248, 0.22);
+            border-color: #38bdf8;
+            color: #38bdf8;
+          }
+
+          /* オーバーレイ右上ステータス */
+          .skull-hud-topright {
+            position: absolute;
+            top: 10px;
+            right: 12px;
+            z-index: 12;
+            display: flex;
+            flex-direction: column;
+            align-items: flex-end;
+            gap: 6px;
+            pointer-events: none;
+          }
+          .skull-round-badge {
+            background: linear-gradient(135deg, #f59e0b, #d97706);
+            color: #fff;
+            font-size: 11px;
+            font-weight: 900;
+            padding: 3px 10px;
+            border-radius: 12px;
+            letter-spacing: 1px;
+          }
+          .skull-players-strip {
+            display: flex;
+            gap: 6px;
+            flex-wrap: wrap;
+            justify-content: flex-end;
+            max-width: 460px;
+          }
+          .sk-p-badge {
+            background: rgba(15, 23, 42, 0.86);
+            backdrop-filter: blur(6px);
+            border: 1px solid #283548;
+            border-radius: 8px;
+            padding: 4px 8px;
+            display: flex;
+            flex-direction: column;
+            gap: 1px;
+            min-width: 92px;
+          }
+          .sk-p-badge.active-turn {
+            border-color: #fbbf24;
+            background: rgba(245, 158, 11, 0.22);
+            box-shadow: 0 0 12px rgba(245, 158, 11, 0.5);
+          }
+          .sk-p-badge.passed, .sk-p-badge.eliminated { opacity: 0.45; }
+          .sk-p-top {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 11px;
+            font-weight: 800;
+            gap: 4px;
+          }
+          .sk-p-stars { color: #fbbf24; font-size: 11px; }
+          .sk-p-meta {
+            display: flex;
+            justify-content: space-between;
+            font-size: 10px;
+            color: #94a3b8;
+          }
+          .sk-p-stack { color: #38bdf8; font-weight: 700; }
+
+          /* ステージ上部中央HUD */
           .skull-hud-top {
             position: absolute;
-            top: 12px;
+            top: 10px;
             left: 50%;
             transform: translateX(-50%);
             z-index: 10;
             display: flex;
             flex-direction: column;
             align-items: center;
-            gap: 6px;
+            gap: 4px;
             pointer-events: none;
-            width: 92%;
-            max-width: 680px;
+            width: 90%;
+            max-width: 560px;
           }
           .skull-phase-pill {
             background: rgba(15, 23, 42, 0.88);
             border: 1px solid #38bdf8;
             color: #38bdf8;
-            font-size: 11px;
+            font-size: 10px;
             font-weight: 900;
-            padding: 3px 12px;
+            padding: 2px 10px;
             border-radius: 20px;
             letter-spacing: 1px;
-            text-transform: uppercase;
           }
           .skull-announce-text {
             background: rgba(15, 23, 42, 0.9);
             backdrop-filter: blur(8px);
             border: 1px solid rgba(255, 255, 255, 0.15);
             color: #f8fafc;
-            font-size: 14px;
+            font-size: 13px;
             font-weight: 800;
-            padding: 7px 20px;
-            border-radius: 12px;
+            padding: 5px 16px;
+            border-radius: 10px;
             text-align: center;
-            box-shadow: 0 8px 20px rgba(0, 0, 0, 0.5);
+            box-shadow: 0 6px 16px rgba(0, 0, 0, 0.5);
           }
           .skull-bid-counter {
             background: linear-gradient(135deg, rgba(220, 38, 38, 0.9), rgba(185, 28, 28, 0.9));
             border: 1px solid #fca5a5;
             color: #fff;
-            font-size: 13px;
+            font-size: 12px;
             font-weight: 800;
-            padding: 4px 16px;
-            border-radius: 20px;
-            box-shadow: 0 4px 15px rgba(239, 68, 68, 0.5);
+            padding: 3px 14px;
+            border-radius: 16px;
           }
 
           /* モーダルオーバーレイ */
@@ -393,58 +387,57 @@
             background: #182234;
             border: 2px solid #fbbf24;
             border-radius: 20px;
-            padding: 28px 34px;
+            padding: 24px 30px;
             text-align: center;
             max-width: 440px;
             width: 90%;
             box-shadow: 0 20px 50px rgba(0,0,0,0.8);
-            animation: popIn 0.28s cubic-bezier(0.16, 1, 0.3, 1);
           }
-          .skull-modal-icon { font-size: 58px; line-height: 1; margin-bottom: 10px; }
-          .skull-modal-title { font-size: 24px; font-weight: 900; margin-bottom: 8px; color: #fbbf24; }
-          .skull-modal-desc { font-size: 14px; color: #cbd5e1; line-height: 1.6; margin-bottom: 20px; }
+          .skull-modal-icon { font-size: 52px; line-height: 1; margin-bottom: 8px; }
+          .skull-modal-title { font-size: 22px; font-weight: 900; margin-bottom: 6px; color: #fbbf24; }
+          .skull-modal-desc { font-size: 13px; color: #cbd5e1; line-height: 1.5; margin-bottom: 16px; }
 
-          /* 下部コックピット */
+          /* 下部スリム・コックピット */
           .skull-cockpit {
             display: grid;
-            grid-template-columns: 1.15fr 1fr;
-            gap: 12px;
+            grid-template-columns: auto 1fr;
+            gap: 10px;
             width: 100%;
           }
           .skull-my-hand-panel, .skull-action-panel {
             background: #141c2b;
             border: 1px solid #283548;
-            border-radius: 14px;
-            padding: 12px 16px;
+            border-radius: 12px;
+            padding: 8px 14px;
             display: flex;
             flex-direction: column;
-            gap: 10px;
+            gap: 6px;
           }
           .panel-header-row {
             display: flex;
             justify-content: space-between;
             align-items: center;
+            gap: 12px;
           }
           .panel-lbl {
-            font-size: 12px;
+            font-size: 11px;
             font-weight: 800;
             color: #94a3b8;
           }
           .my-wins-stars {
-            font-size: 13px;
+            font-size: 12px;
             font-weight: 900;
             color: #fbbf24;
           }
           .skull-hand-cards {
             display: flex;
-            gap: 10px;
+            gap: 8px;
             align-items: center;
-            flex-wrap: wrap;
-            min-height: 76px;
+            min-height: 58px;
           }
           .sk-hand-disc {
-            width: 72px;
-            height: 72px;
+            width: 58px;
+            height: 58px;
             border-radius: 50%;
             display: flex;
             flex-direction: column;
@@ -452,59 +445,57 @@
             align-items: center;
             cursor: pointer;
             font-weight: 800;
-            font-size: 11px;
+            font-size: 10px;
             transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
-            box-shadow: 0 6px 14px rgba(0,0,0,0.45);
-            position: relative;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.45);
           }
           .sk-hand-disc.flower {
             background: radial-gradient(circle at 35% 35%, #be185d, #500724);
-            border: 3px solid #f472b6;
+            border: 2px solid #f472b6;
             color: #fce7f3;
           }
           .sk-hand-disc.skull {
             background: radial-gradient(circle at 35% 35%, #3f3f46, #09090b);
-            border: 3px solid #ef4444;
+            border: 2px solid #ef4444;
             color: #fecaca;
           }
           .sk-hand-disc:hover:not(.disabled) {
-            transform: translateY(-6px) scale(1.06);
-            box-shadow: 0 12px 20px rgba(56, 189, 248, 0.4);
+            transform: translateY(-4px) scale(1.06);
+            box-shadow: 0 8px 16px rgba(56, 189, 248, 0.4);
           }
           .sk-hand-disc.disabled {
             opacity: 0.35;
             cursor: not-allowed;
             filter: grayscale(0.5);
           }
-          .sk-disc-emoji { font-size: 26px; line-height: 1; margin-bottom: 2px; }
+          .sk-disc-emoji { font-size: 20px; line-height: 1; }
 
           .skull-action-controls {
             display: flex;
             align-items: center;
-            gap: 8px;
+            gap: 6px;
             flex-wrap: wrap;
-            min-height: 76px;
+            min-height: 58px;
           }
           .bid-num-btn {
             background: linear-gradient(135deg, #f59e0b, #d97706);
             color: #fff;
             border: none;
-            border-radius: 10px;
-            padding: 10px 15px;
-            font-size: 14px;
+            border-radius: 8px;
+            padding: 8px 13px;
+            font-size: 13px;
             font-weight: 900;
             cursor: pointer;
             transition: all 0.15s;
-            box-shadow: 0 4px 12px rgba(245, 158, 11, 0.3);
           }
           .bid-num-btn:hover { transform: translateY(-2px); filter: brightness(1.1); }
           .pass-bid-btn {
             background: #334155;
             color: #e2e8f0;
             border: 1px solid #64748b;
-            border-radius: 10px;
-            padding: 10px 16px;
-            font-size: 13px;
+            border-radius: 8px;
+            padding: 8px 14px;
+            font-size: 12px;
             font-weight: 800;
             cursor: pointer;
           }
@@ -514,9 +505,9 @@
             background: linear-gradient(135deg, #2563eb, #1d4ed8);
             border: 1px solid #60a5fa;
             color: #fff;
-            border-radius: 10px;
-            padding: 9px 14px;
-            font-size: 13px;
+            border-radius: 8px;
+            padding: 8px 12px;
+            font-size: 12px;
             font-weight: 800;
             cursor: pointer;
             transition: all 0.15s;
@@ -525,7 +516,8 @@
 
           @media (max-width: 768px) {
             .skull-cockpit { grid-template-columns: 1fr; }
-            .skull-stage-box { height: 380px; }
+            .skull-stage-box { height: 420px; }
+            .skull-hud-topright { display: none; }
           }
         `;
         document.head.appendChild(style);
