@@ -71,6 +71,7 @@
       let isGameOver = false;
       let winner = null;
       let gameOverReason = '';     // 'cleared' | 'assassin'
+      let vsCpu = !bridge.isConnected(); // 未接続時はCPU対戦をデフォルト有効化
 
       // ローカルUI設定
       let isSpymasterView = false; // スパイマスター視点 (正解キー透視)
@@ -92,7 +93,7 @@
               </div>
               <div class="cn-score-card blue-card ${currentTeam === TYPE_BLUE ? 'active-turn' : ''}">
                 <span class="team-badge-icon">🔵</span>
-                <span class="team-name">青チーム</span>
+                <span class="team-name">青チーム (CPU)</span>
                 <span class="score-count" id="cn-blue-remaining">8</span>
               </div>
             </div>
@@ -101,6 +102,12 @@
             <div class="cn-toolbar">
               <button id="cn-toggle-spymaster-btn" class="btn btn-sm btn-spymaster" title="スパイマスター専用：カードの正解色を透視表示します">
                 <span class="eye-icon">👁️</span> スパイマスター視点: <strong id="cn-spy-status">OFF</strong>
+              </button>
+              <button id="cn-cpu-btn" class="btn btn-sm btn-subtle" title="CPU対戦の切替">
+                🤖 CPU対戦: ON
+              </button>
+              <button id="cn-ai-clue-btn" class="btn btn-sm btn-secondary" title="赤チーム用のヒントをAIに自動生成してもらいます">
+                💡 AIヒント提案
               </button>
               <button id="cn-pass-turn-btn" class="btn btn-sm btn-secondary" disabled>
                 ⏭️ ターン終了 (パス)
@@ -535,6 +542,8 @@
       const skipClueBtn = container.querySelector('#cn-skip-clue-btn');
       const toggleSpyBtn = container.querySelector('#cn-toggle-spymaster-btn');
       const spyStatusText = container.querySelector('#cn-spy-status');
+      const cpuBtn = container.querySelector('#cn-cpu-btn');
+      const aiClueBtn = container.querySelector('#cn-ai-clue-btn');
       const passTurnBtn = container.querySelector('#cn-pass-turn-btn');
       const restartBtn = container.querySelector('#cn-restart-btn');
       const logEntriesEl = container.querySelector('#cn-log-entries');
@@ -612,6 +621,10 @@
         addLog(`🎲 新しいゲームを開始しました。先攻は <strong>${startingTeam === TYPE_RED ? '<span class="log-red">赤チーム (9枚)</span>' : '<span class="log-blue">青チーム (9枚)</span>'}</strong> です。`);
         resultModal.classList.add('hidden');
         render();
+
+        if (vsCpu && currentTeam === TYPE_BLUE && !isGameOver) {
+          triggerCpuTurn();
+        }
       }
 
       // 描画処理
@@ -651,6 +664,11 @@
         // スパイマスター視点ボタン状態
         toggleSpyBtn.classList.toggle('active', isSpymasterView);
         spyStatusText.textContent = isSpymasterView ? 'ON' : 'OFF';
+
+        if (cpuBtn) {
+          cpuBtn.textContent = vsCpu ? '🤖 CPU対戦: ON' : '👥 2人対戦';
+          cpuBtn.style.color = vsCpu ? '#38bdf8' : '#94a3b8';
+        }
 
         // 25枚のカード描画
         gridEl.innerHTML = '';
@@ -815,6 +833,95 @@
         currentClue = null;
         remainingGuesses = 0;
         render();
+
+        if (vsCpu && currentTeam === TYPE_BLUE && !isGameOver) {
+          triggerCpuTurn();
+        }
+      }
+
+      // CPU (青チーム) & AI スパイマスター思考ルーチン
+      function triggerCpuTurn() {
+        if (!vsCpu || isGameOver || currentTeam !== TYPE_BLUE) return;
+
+        if (currentPhase === 'clue') {
+          turnBadgeEl.textContent = '🤖 青チーム (CPU) がヒント考案中…';
+          setTimeout(() => {
+            if (isGameOver || currentTeam !== TYPE_BLUE || currentPhase !== 'clue') return;
+
+            const unrevealedBlue = cards.filter(c => !c.revealed && c.type === TYPE_BLUE);
+            if (unrevealedBlue.length === 0) return;
+
+            const pickCount = Math.min(unrevealedBlue.length, Math.random() < 0.6 ? 2 : 1);
+            const hintThemes = ["極秘コード", "通信", "捜索", "エージェント", "シグナル", "ネットワーク", "ターゲット", "暗号", "任務", "指令", "作戦"];
+            const hintWord = hintThemes[Math.floor(Math.random() * hintThemes.length)];
+
+            submitClue(hintWord, pickCount);
+            triggerCpuGuess();
+          }, 700);
+        } else if (currentPhase === 'guess') {
+          triggerCpuGuess();
+        }
+      }
+
+      function triggerCpuGuess() {
+        if (isGameOver || currentTeam !== TYPE_BLUE || currentPhase !== 'guess') return;
+
+        setTimeout(() => {
+          if (isGameOver || currentTeam !== TYPE_BLUE || currentPhase !== 'guess') return;
+
+          const unrevealed = cards.filter(c => !c.revealed);
+          if (unrevealed.length === 0) return;
+
+          const unrevealedBlue = unrevealed.filter(c => c.type === TYPE_BLUE);
+          const unrevealedNeutral = unrevealed.filter(c => c.type === TYPE_NEUTRAL);
+          const unrevealedOthers = unrevealed.filter(c => c.type !== TYPE_BLUE && c.type !== TYPE_NEUTRAL);
+
+          // 80% で正解の青カード、15% で中立（一般人）、5% でその他
+          const rand = Math.random();
+          let target = null;
+          if (rand < 0.80 && unrevealedBlue.length > 0) {
+            target = unrevealedBlue[Math.floor(Math.random() * unrevealedBlue.length)];
+          } else if (rand < 0.95 && unrevealedNeutral.length > 0) {
+            target = unrevealedNeutral[Math.floor(Math.random() * unrevealedNeutral.length)];
+          } else if (unrevealedOthers.length > 0) {
+            target = unrevealedOthers[Math.floor(Math.random() * unrevealedOthers.length)];
+          } else {
+            target = unrevealed[Math.floor(Math.random() * unrevealed.length)];
+          }
+
+          if (target) {
+            handleCardClick(target.id, true);
+
+            // 正解かつ回答回数が残っている場合、継続するかパスするか
+            if (!isGameOver && currentTeam === TYPE_BLUE && currentPhase === 'guess' && remainingGuesses > 0) {
+              if (Math.random() < 0.65) {
+                triggerCpuGuess();
+              } else {
+                setTimeout(() => {
+                  if (!isGameOver && currentTeam === TYPE_BLUE && currentPhase === 'guess') {
+                    addLog(`⏭️ <span class="log-blue">青チーム (CPU)</span> が安全のためターンを終了しました。`);
+                    endTurn();
+                  }
+                }, 600);
+              }
+            }
+          }
+        }, 850);
+      }
+
+      // AI スパイマスター (赤チーム用ヒント自動提案)
+      function generateAiClueForRed() {
+        const unrevealedRed = cards.filter(c => !c.revealed && c.type === TYPE_RED);
+        if (unrevealedRed.length === 0) return;
+
+        // 単語例をいくつか見てテーマ連想
+        const themes = ["探索", "ミッション", "重要情報", "チーム", "暗号キー", "コード", "ターゲット", "エリア", "秘密"];
+        const word = themes[Math.floor(Math.random() * themes.length)];
+        const count = Math.min(unrevealedRed.length, Math.random() < 0.5 ? 2 : 1);
+
+        clueWordInput.value = word;
+        clueCountSelect.value = count.toString();
+        bridge.showToast(`💡 AIヒント『${word} (${count}枚)』を提案しました！「ヒント送信」を押して決定してください`);
       }
 
       // 結果モーダル表示
@@ -853,6 +960,26 @@
         isSpymasterView = !isSpymasterView;
         render();
       });
+
+      // 3.5 CPU対戦トグル
+      if (cpuBtn) {
+        cpuBtn.addEventListener('click', () => {
+          vsCpu = !vsCpu;
+          bridge.showToast(vsCpu ? '🤖 CPU対戦（青チームAI）を有効にしました' : '👥 2人対戦モードに切り替えました');
+          render();
+          if (vsCpu && currentTeam === TYPE_BLUE && !isGameOver) {
+            triggerCpuTurn();
+          }
+        });
+      }
+
+      // 3.6 AIヒント提案
+      if (aiClueBtn) {
+        aiClueBtn.addEventListener('click', () => {
+          if (isGameOver) return;
+          generateAiClueForRed();
+        });
+      }
 
       // 4. パスボタン
       passTurnBtn.addEventListener('click', () => {

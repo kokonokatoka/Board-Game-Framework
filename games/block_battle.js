@@ -37,6 +37,7 @@
       const isP1 = bridge.isHost;
       const myRole = isP1 ? 'p1' : 'p2';
       const oppRole = isP1 ? 'p2' : 'p1';
+      let vsCpu = !bridge.isConnected(); // 未接続時はCPU対戦有効
 
       let p1Hp = MAX_HP, p2Hp = MAX_HP;
       let p1Charge = 0, p2Charge = 0;
@@ -119,6 +120,9 @@
               <div class="bb-banner" id="bb-banner">対戦スタート！</div>
               <div class="bb-charge-bar-wrap">
                 <div class="bb-charge-bar-fill" id="bb-charge-fill"></div>
+              </div>
+              <div style="margin-top: 6px;">
+                <button id="bb-cpu-btn" class="btn btn-sm btn-subtle" style="font-size: 11px; padding: 2px 8px;">🤖 CPU対戦: ON</button>
               </div>
             </div>
 
@@ -206,6 +210,7 @@
       const overlayEl = container.querySelector('#bb-game-over-overlay');
       const resultTitle = container.querySelector('#bb-result-title');
       const retryBtn = container.querySelector('#bb-retry-btn');
+      const cpuBtn = container.querySelector('#bb-cpu-btn');
       const btn1 = container.querySelector('#bb-btn-1');
       const btn2 = container.querySelector('#bb-btn-2');
       const btn3 = container.querySelector('#bb-btn-3');
@@ -350,6 +355,11 @@
         const myCharge = isP1 ? p1Charge : p2Charge;
         const myCharging = (isP1 ? p1ChargingUntil : p2ChargingUntil) > performance.now();
 
+        if (cpuBtn) {
+          cpuBtn.textContent = vsCpu ? '🤖 CPU対戦: ON' : '👥 2人対戦';
+          cpuBtn.style.color = vsCpu ? '#38bdf8' : '#94a3b8';
+        }
+
         btn1.disabled = isGameOver || myCharge <= 0 || myCharging;
         btn2.disabled = isGameOver || myCharging;
         btn3.disabled = isGameOver || myCharge >= MAX_CHARGE || myCharging;
@@ -409,6 +419,96 @@
         bannerEl.textContent = '🛡️ 防御シールド展開！';
         bridge.send({ game: 'block_battle_3d', type: 'guard', role: myRole });
         updateUI();
+      }
+
+      // CPU (青: P2) アクション & 思考AI
+      function cpuCharge() {
+        const now = performance.now();
+        if (p2Charge >= MAX_CHARGE || isGameOver || p2ChargingUntil > now) return;
+        p2ChargingUntil = now + CHARGE_DURATION;
+        p2GuardUntil = 0;
+        sfx.charge();
+        bannerEl.textContent = '⚡ CPUがチャージ中…';
+        updateUI();
+      }
+
+      function cpuAttack() {
+        const now = performance.now();
+        if (p2Charge <= 0 || isGameOver || p2ChargingUntil > now) return;
+        p2Charge--;
+        p2GuardUntil = 0;
+        sfx.attack();
+        spawnBulletMesh(false); // P2からの攻撃
+        bannerEl.textContent = '🤖 CPUが攻撃！ (0.5秒で着弾)';
+        updateUI();
+      }
+
+      function cpuGuard() {
+        const now = performance.now();
+        if (isGameOver || p2ChargingUntil > now) return;
+        p2GuardUntil = now + GUARD_DURATION;
+        p2ChargingUntil = 0;
+        sfx.guard();
+        bannerEl.textContent = '🤖 CPUがガードシールドを展開！';
+        updateUI();
+      }
+
+      let lastCpuDecision = 0;
+      function updateCpuAi(now) {
+        if (!vsCpu || isGameOver || !isP1) return;
+
+        // 1. 弾検知ガード (プレイヤーからの弾が向かってきており、まだガードしていない)
+        const incomingBullet = activeBullets.find(b => b.fromP1);
+        if (incomingBullet) {
+          const elapsed = now - incomingBullet.startTime;
+          // 発射後180ms〜450msのタイミングで、かつ現在ガードしていなければ高確率でガード
+          if (elapsed > 180 && p2GuardUntil <= now && p2ChargingUntil <= now) {
+            if (Math.random() < 0.85) {
+              cpuGuard();
+              return;
+            }
+          }
+        }
+
+        // 2. 定期的な意思決定 (700〜1100ms周期)
+        if (now - lastCpuDecision < 750) return;
+        lastCpuDecision = now + Math.random() * 300;
+
+        // チャージ中またはガード中なら待機
+        if (p2ChargingUntil > now || p2GuardUntil > now) return;
+
+        // プレイヤーの隙（チャージ中）を狙った即時攻撃
+        const p1IsCharging = p1ChargingUntil > now;
+        if (p1IsCharging && p2Charge > 0) {
+          if (Math.random() < 0.8) {
+            cpuAttack();
+            return;
+          }
+        }
+
+        // チャージがゼロならチャージ必須
+        if (p2Charge === 0) {
+          cpuCharge();
+          return;
+        }
+
+        // チャージが最大(3)なら必殺攻撃
+        if (p2Charge >= MAX_CHARGE) {
+          cpuAttack();
+          return;
+        }
+
+        // チャージが1〜2の場合の駆け引き
+        const p1IsGuarding = p1GuardUntil > now;
+        if (p1IsGuarding) {
+          cpuCharge();
+        } else {
+          if (Math.random() < 0.55) {
+            cpuAttack();
+          } else {
+            cpuCharge();
+          }
+        }
       }
 
       // 被弾判定
@@ -507,6 +607,13 @@
       btn1.addEventListener('click', actionAttack);
       btn2.addEventListener('click', actionGuard);
       btn3.addEventListener('click', actionCharge);
+      if (cpuBtn) {
+        cpuBtn.addEventListener('click', () => {
+          vsCpu = !vsCpu;
+          bridge.showToast(vsCpu ? '🤖 CPU対戦モードに切り替えました' : '👥 2人対戦モードに切り替えました');
+          updateUI();
+        });
+      }
       retryBtn.addEventListener('click', () => {
         resetMatch();
         bridge.send({ game: 'block_battle_3d', type: 'reset' });
@@ -518,6 +625,9 @@
         animFrameId = requestAnimationFrame(animate);
 
         const now = performance.now();
+
+        // CPU思考AI更新
+        updateCpuAi(now);
 
         // チャージ完了判定
         if (p1ChargingUntil > 0 && now >= p1ChargingUntil) {

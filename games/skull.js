@@ -45,6 +45,7 @@
       let isDestroyed = false;
       let animFrameId = null;
       let activePlayerCount = 2; // デフォルト2人対戦
+      let vsCpu = !bridge.isConnected(); // 未接続時はCPU対戦有効
 
       // HTML UI 構築
       container.innerHTML = `
@@ -65,9 +66,12 @@
                 </select>
               </label>
               <span class="seat-badge-info" id="seat-badge-info">着席: 2 / 8 席 (6席グレーアウト中)</span>
+              <button id="btn-cpu-mode" class="btn btn-sm btn-subtle" style="color: #38bdf8;">🤖 CPU対戦: ON</button>
             </div>
 
             <div class="skull-right-actions">
+              <button id="btn-cpu-set-cards" class="btn btn-sm btn-secondary" title="参加中のCPUプレイヤーが裏向きで場にカードを1枚出します">🃏 CPUがカードをセット</button>
+              <button id="btn-cpu-flip-one" class="btn btn-sm btn-secondary" title="場のカードをめくります">🎯 CPUにめくらせる</button>
               <button id="btn-reset-hand" class="btn btn-sm btn-subtle" title="自分の手札4枚を手元スロットにきれいに整列します">🔄 手元に整列</button>
               <button id="btn-flip-all-down" class="btn btn-sm btn-subtle" title="手札を裏向きに伏せます">🎴 全て伏せる</button>
             </div>
@@ -238,6 +242,9 @@
       const canvasContainer = container.querySelector('#skull-3d-container');
       const playerCountSelect = container.querySelector('#skull-player-count-select');
       const seatBadgeInfo = container.querySelector('#seat-badge-info');
+      const btnCpuMode = container.querySelector('#btn-cpu-mode');
+      const btnCpuSetCards = container.querySelector('#btn-cpu-set-cards');
+      const btnCpuFlipOne = container.querySelector('#btn-cpu-flip-one');
       const btnResetHand = container.querySelector('#btn-reset-hand');
       const btnFlipAllDown = container.querySelector('#btn-flip-all-down');
       const dragHint = container.querySelector('#drag-hint');
@@ -846,6 +853,71 @@
         });
         bridge.showToast('自分の手札をすべて裏向きに伏せました！');
       });
+
+      // CPU対戦トグル
+      if (btnCpuMode) {
+        btnCpuMode.addEventListener('click', () => {
+          vsCpu = !vsCpu;
+          btnCpuMode.textContent = vsCpu ? '🤖 CPU対戦: ON' : '👥 2人対戦';
+          btnCpuMode.style.color = vsCpu ? '#38bdf8' : '#94a3b8';
+          bridge.showToast(vsCpu ? '🤖 CPU対戦モードをONにしました' : '👥 2人対戦モードに切り替えました');
+        });
+      }
+
+      // CPUカードセット
+      if (btnCpuSetCards) {
+        btnCpuSetCards.addEventListener('click', () => {
+          let count = 0;
+          for (let s = 1; s < activePlayerCount; s++) {
+            const seat = seatData[s];
+            if (!seat.isActive) continue;
+
+            // その席のディスクで、まだ手元（中心から6.0以上）にあるものを探す
+            const seatDiscs = allDiscs.filter(d => d.userData.seatIndex === s && Math.hypot(d.position.x, d.position.z) > 5.5);
+            if (seatDiscs.length > 0) {
+              const pick = seatDiscs[Math.floor(Math.random() * seatDiscs.length)];
+              // 中央バトルエリア方向へ配置
+              const targetX = seat.cx * 0.32 + (Math.random() - 0.5) * 0.4;
+              const targetZ = seat.cz * 0.32 + (Math.random() - 0.5) * 0.4;
+              pick.position.set(targetX, 0.08, targetZ);
+              if (pick.userData.isFaceUp) {
+                flipDisc(pick, false);
+              }
+              count++;
+            }
+          }
+
+          if (count > 0) {
+            bridge.showToast(`🤖 各CPUプレイヤー（${count}名）が場にカードを伏せてセットしました！`);
+            if (bridge.isConnected()) {
+              bridge.send({ game: 'skull', type: 'cpu_set_cards' });
+            }
+          } else {
+            bridge.showToast('セット可能な手札がありません');
+          }
+        });
+      }
+
+      // CPUにめくらせる
+      if (btnCpuFlipOne) {
+        btnCpuFlipOne.addEventListener('click', () => {
+          // 中央バトルゾーン (半径4.5以内) にある裏向きカード
+          const battleDiscs = allDiscs.filter(d => Math.hypot(d.position.x, d.position.z) < 4.8 && !d.userData.isFaceUp);
+          if (battleDiscs.length === 0) {
+            bridge.showToast('場に裏向きのカードがありません');
+            return;
+          }
+
+          const pick = battleDiscs[Math.floor(Math.random() * battleDiscs.length)];
+          flipDisc(pick, true);
+
+          if (pick.userData.type === DISC_SKULL) {
+            bridge.showToast('💀 ドクロが出現！チャレンジ失敗！');
+          } else {
+            bridge.showToast('🌸 花！セーフ！');
+          }
+        });
+      }
 
       // ----------------------------------------------------
       // 8. P2P 同期イベント

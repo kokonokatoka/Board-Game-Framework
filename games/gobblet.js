@@ -1,11 +1,11 @@
 /**
- * 🧡 ゴブレットゴブラーズ (Gobblet Gobblers) Component
+ * 🧡 ゴブレットゴブラーズ (Gobblet Gobblers) Component - CPU対戦完備版
  * Board Arena Plugin
  */
 
 (function () {
-  const P1 = 1; // オレンジ (先手・ホスト)
-  const P2 = 2; // ブルー (後手・ゲスト)
+  const P1 = 1; // オレンジ (あなた)
+  const P2 = 2; // ブルー (CPU / 相手)
 
   const SIZES = {
     1: { name: '小', label: 'S', px: 28 },
@@ -27,42 +27,42 @@
     name: 'ゴブレットゴブラーズ',
     category: 'ボードゲーム',
     icon: '👾',
-    players: '2人',
+    players: '1〜2人',
     playTime: '3-5分',
-    description: '3×3の進化系まるばつゲーム！小さいコマの上から「被せて」乗っ取れる白熱の心理戦！',
+    description: '3×3の進化系まるばつゲーム！小さいコマの上から「被せて」乗っ取れる白熱の心理戦！CPU対戦付き！',
 
     mount(container, bridge) {
-      // ゲーム状態
+      let isDestroyed = false;
       let board = [
         [[], [], []],
         [[], [], []],
         [[], [], []]
       ];
 
-      // 手持ちコマ (各サイズ2個ずつ)
       let hands = {
         [P1]: { 1: 2, 2: 2, 3: 2 },
         [P2]: { 1: 2, 2: 2, 3: 2 }
       };
 
       let currentTurn = P1;
-      const myPlayer = bridge.isHost ? P1 : P2;
       let isGameOver = false;
-
-      // 選択中のコマ
-      // type: 'hand' (from hand) or 'board' (from board cell)
+      let vsCpu = !bridge.isConnected();
+      let myPlayer = P1;
       let selectedPiece = null;
 
       container.innerHTML = `
         <div class="gobblet-wrapper">
           <div class="gobblet-status-bar">
-            <div class="turn-badge" id="gob-turn-badge">オレンジの手番です</div>
+            <div class="gob-turn-group">
+              <span class="turn-badge" id="gob-turn-badge">オレンジの手番です</span>
+              <button id="gob-mode-btn" class="btn btn-sm btn-subtle gob-mode-btn">${vsCpu ? '🤖 CPU対戦中' : '👥 2人対戦'}</button>
+            </div>
             <div class="gobblet-hint" id="gob-hint">コマを選んでマスに置いてください</div>
           </div>
 
-          <!-- P1 (オレンジ) 手持ちコマエリア -->
+          <!-- P1 (オレンジ) 手持ちエリア -->
           <div class="gob-hand-section" id="p1-hand-area">
-            <span class="hand-label p1-label">P1 (オレンジ) 手持ち:</span>
+            <span class="hand-label p1-label">あなた (オレンジ) 手持ち:</span>
             <div class="hand-pieces" id="p1-pieces"></div>
           </div>
 
@@ -71,9 +71,9 @@
             <div id="gobblet-grid" class="gobblet-grid"></div>
           </div>
 
-          <!-- P2 (ブルー) 手持ちコマエリア -->
+          <!-- P2 (ブルー) 手持ちエリア -->
           <div class="gob-hand-section" id="p2-hand-area">
-            <span class="hand-label p2-label">P2 (ブルー) 手持ち:</span>
+            <span class="hand-label p2-label">${vsCpu ? 'CPU' : '相手'} (ブルー) 手持ち:</span>
             <div class="hand-pieces" id="p2-pieces"></div>
           </div>
 
@@ -87,6 +87,7 @@
 
       const gridEl = container.querySelector('#gobblet-grid');
       const turnBadge = container.querySelector('#gob-turn-badge');
+      const modeBtn = container.querySelector('#gob-mode-btn');
       const hintEl = container.querySelector('#gob-hint');
       const p1PiecesEl = container.querySelector('#p1-pieces');
       const p2PiecesEl = container.querySelector('#p2-pieces');
@@ -94,34 +95,34 @@
       const resText = container.querySelector('#gob-res-text');
       const restartBtn = container.querySelector('#gob-restart-btn');
 
-      // スタイル定義
       if (!document.getElementById('gobblet-custom-css')) {
         const style = document.createElement('style');
         style.id = 'gobblet-custom-css';
         style.textContent = `
-          .gobblet-wrapper { display: flex; flex-direction: column; align-items: center; width: 100%; max-width: 440px; }
-          .gobblet-status-bar { width: 100%; display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
-          .gobblet-hint { font-size: 12px; color: #94a3b8; font-weight: 600; }
-          .gob-hand-section { display: flex; align-items: center; justify-content: space-between; width: 100%; background: #161f2e; padding: 8px 14px; border-radius: 12px; margin: 4px 0; border: 1px solid #2b384a; }
+          .gobblet-wrapper { display: flex; flex-direction: column; align-items: center; width: 100%; max-width: 440px; margin: 0 auto; user-select: none; }
+          .gobblet-status-bar { width: 100%; display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; flex-wrap: wrap; gap: 8px; }
+          .gob-turn-group { display: flex; align-items: center; gap: 8px; }
+          .turn-badge { font-size: 13px; font-weight: 700; background: #1e293b; padding: 5px 12px; border-radius: 8px; border: 1px solid #334155; }
+          .gob-mode-btn { font-size: 11px; font-weight: 700; background: #1e293b; border: 1px solid #3b82f6; color: #38bdf8; padding: 4px 8px; border-radius: 6px; cursor: pointer; }
+          .gobblet-hint { font-size: 11px; color: #94a3b8; }
+          .gob-hand-section { display: flex; align-items: center; justify-content: space-between; width: 100%; background: #161f2e; padding: 6px 12px; border-radius: 10px; margin: 3px 0; border: 1px solid #2b384a; }
           .hand-label { font-size: 12px; font-weight: 700; }
           .p1-label { color: #f97316; }
           .p2-label { color: #38bdf8; }
-          .hand-pieces { display: flex; gap: 10px; align-items: center; }
+          .hand-pieces { display: flex; gap: 8px; align-items: center; }
           
-          .hand-slot { display: flex; align-items: center; gap: 4px; padding: 4px 8px; border-radius: 8px; cursor: pointer; border: 2px solid transparent; background: #0f172a; transition: all 0.2s; }
+          .hand-slot { display: flex; align-items: center; gap: 4px; padding: 3px 6px; border-radius: 8px; cursor: pointer; border: 2px solid transparent; background: #0f172a; transition: all 0.15s; }
           .hand-slot:hover { border-color: #64748b; }
           .hand-slot.selected { border-color: #facc15; box-shadow: 0 0 10px rgba(250, 204, 21, 0.6); transform: scale(1.08); }
-          .slot-count { font-size: 13px; font-weight: 800; color: #fff; }
+          .slot-count { font-size: 12px; font-weight: 800; color: #fff; }
 
-          /* 3×3 盤面 */
-          .gobblet-board-frame { width: 100%; aspect-ratio: 1/1; padding: 12px; background: #291e14; border-radius: 16px; box-shadow: 0 14px 34px rgba(0,0,0,0.6); margin: 8px 0; }
+          .gobblet-board-frame { width: 100%; aspect-ratio: 1/1; padding: 10px; background: #291e14; border-radius: 16px; box-shadow: 0 14px 34px rgba(0,0,0,0.6); margin: 6px 0; }
           .gobblet-grid { width: 100%; height: 100%; background: #453220; display: grid; grid-template-columns: repeat(3, 1fr); grid-template-rows: repeat(3, 1fr); gap: 6px; border: 3px solid #1a120b; border-radius: 8px; }
-          .gob-cell { background: #5c432d; display: flex; justify-content: center; align-items: center; cursor: pointer; position: relative; border-radius: 6px; transition: background 0.2s; }
+          .gob-cell { background: #5c432d; display: flex; justify-content: center; align-items: center; cursor: pointer; position: relative; border-radius: 6px; transition: background 0.15s; }
           .gob-cell:hover { background: #6e5137; }
           .gob-cell.valid-target { background: #3b5034; box-shadow: inset 0 0 12px #4ade80; }
           .gob-cell.selected-source { border: 2px solid #facc15; }
 
-          /* コマの見た目（モンスターフェイス） */
           .gob-piece { border-radius: 50%; display: flex; justify-content: center; align-items: center; position: relative; cursor: pointer; box-shadow: 0 4px 10px rgba(0,0,0,0.5); transition: transform 0.2s; }
           .gob-piece.p1 { background: radial-gradient(circle at 35% 35%, #fb923c, #ea580c 70%, #9a3412); border: 2px solid #fdba74; }
           .gob-piece.p2 { background: radial-gradient(circle at 35% 35%, #38bdf8, #0284c7 70%, #0369a1); border: 2px solid #7dd3fc; }
@@ -147,16 +148,27 @@
         render();
       }
 
-      // あるマスに指定サイズのコマを置けるかチェック
+      modeBtn.addEventListener('click', () => {
+        if (bridge.isConnected()) {
+          bridge.showToast('オンライン対戦中はCPUモードに切り替えられません');
+          return;
+        }
+        vsCpu = !vsCpu;
+        modeBtn.textContent = vsCpu ? '🤖 CPU対戦中' : '👥 2人対戦';
+        bridge.showToast(vsCpu ? '🤖 CPU対戦モードに切り替えました！' : '👥 2人対戦モードに切り替えました！');
+        render();
+        if (vsCpu && currentTurn === P2 && !isGameOver) {
+          triggerCpuMove();
+        }
+      });
+
       function canPlaceOnCell(r, c, size) {
         const stack = board[r][c];
         if (stack.length === 0) return true;
         const top = stack[stack.length - 1];
-        // 対象マスのトップのコマより大きければ被せられる（ゴブラー！）
         return size > top.size;
       }
 
-      // 勝利判定 (一番上のコマの色をチェック)
       function checkWinner() {
         for (const line of WIN_LINES) {
           const [a, b, c] = line;
@@ -173,12 +185,10 @@
         return null;
       }
 
-      // 着手実行
       function executeMove(moveData, isLocal = false) {
         const { from, to, player } = moveData;
         let movingPiece = null;
 
-        // 1. 移動元のコマを取り出す
         if (from.type === 'hand') {
           hands[player][from.size]--;
           movingPiece = { player: player, size: from.size };
@@ -186,63 +196,212 @@
           movingPiece = board[from.r][from.c].pop();
         }
 
-        // 2. 移動先に配置（被せる）
         board[to.r][to.c].push(movingPiece);
 
-        // ローカルの手なら相手に送信
-        if (isLocal) {
+        if (isLocal && bridge.isConnected()) {
           bridge.send({ game: 'gobblet', type: 'move', move: moveData });
         }
 
-        // 3. 勝敗チェック
-        // ※自分のコマを動かしたことで、下にあった相手のコマが現れて相手が勝つ場合もある！
         const winner = checkWinner();
         if (winner) {
           isGameOver = true;
-          const winnerName = winner === P1 ? 'オレンジ (P1)' : 'ブルー (P2)';
-          resText.textContent = `🎉 ${winnerName} の勝利！！`;
+          const winnerName = winner === P1 
+            ? '🎉 オレンジ (あなた) の勝利！！' 
+            : (vsCpu ? '💀 ブルー (CPU) の勝利！' : '🎉 ブルー の勝利！！');
+          resText.textContent = winnerName;
           resBanner.classList.remove('hidden');
-          bridge.showToast(`${winnerName} の勝利！`);
+          bridge.showToast(winnerName);
+          if (winner === P1) bridge.recordWin();
         } else {
-          // ターン交代
           currentTurn = currentTurn === P1 ? P2 : P1;
         }
 
         selectedPiece = null;
         render();
+
+        if (vsCpu && currentTurn === P2 && !isGameOver) {
+          triggerCpuMove();
+        }
       }
 
-      // 描画処理
+      // 🧠 賢い思考型ゴブレットCPU (AI)
+      function triggerCpuMove() {
+        if (isGameOver || isDestroyed) return;
+
+        setTimeout(() => {
+          if (isGameOver || currentTurn !== P2 || isDestroyed) return;
+
+          const legalMoves = getAllLegalMoves(P2);
+          if (legalMoves.length === 0) return;
+
+          // 1. CPUが勝利できる手
+          for (const m of legalMoves) {
+            applyTempMove(m);
+            const w = checkWinner();
+            revertTempMove(m);
+            if (w === P2) {
+              executeMove(m, false);
+              return;
+            }
+          }
+
+          // 2. 相手(P1)のリーチを阻止する手
+          const oppWinningCells = findWinningThreats(P1);
+          if (oppWinningCells.length > 0) {
+            for (const threat of oppWinningCells) {
+              // threatのマスの真上に被せられる自分の手を探す
+              const blockMove = legalMoves.find(m => m.to.r === threat.r && m.to.c === threat.c);
+              if (blockMove) {
+                applyTempMove(blockMove);
+                const w = checkWinner();
+                revertTempMove(blockMove);
+                // 自滅手でなければ阻止！
+                if (w !== P1) {
+                  executeMove(blockMove, false);
+                  return;
+                }
+              }
+            }
+          }
+
+          // 3. 中央 (1, 1) への配置優先
+          const centerMove = legalMoves.find(m => m.to.r === 1 && m.to.c === 1 && m.from.type === 'hand');
+          if (centerMove) {
+            executeMove(centerMove, false);
+            return;
+          }
+
+          // 4. 自滅手（相手が勝つ）を避けて、安全な最善手を選択
+          const safeMoves = [];
+          for (const m of legalMoves) {
+            applyTempMove(m);
+            const w = checkWinner();
+            revertTempMove(m);
+            if (w !== P1) {
+              safeMoves.push(m);
+            }
+          }
+
+          if (safeMoves.length > 0) {
+            // サイズが大きいコマ、または中央・角を優先
+            safeMoves.sort((a, b) => {
+              const sizeA = a.from.size;
+              const sizeB = b.from.size;
+              return sizeB - sizeA;
+            });
+            executeMove(safeMoves[0], false);
+          } else {
+            executeMove(legalMoves[0], false);
+          }
+        }, 500);
+      }
+
+      function getAllLegalMoves(player) {
+        const moves = [];
+        const hand = hands[player];
+
+        // 手持ちからの配置
+        [3, 2, 1].forEach(size => {
+          if (hand[size] > 0) {
+            for (let r = 0; r < 3; r++) {
+              for (let c = 0; c < 3; c++) {
+                if (canPlaceOnCell(r, c, size)) {
+                  moves.push({
+                    from: { type: 'hand', size: size },
+                    to: { r: r, c: c },
+                    player: player
+                  });
+                }
+              }
+            }
+          }
+        });
+
+        // 盤面からの移動
+        for (let r = 0; r < 3; r++) {
+          for (let c = 0; c < 3; c++) {
+            const top = board[r][c].at(-1);
+            if (top && top.player === player) {
+              for (let tr = 0; tr < 3; tr++) {
+                for (let tc = 0; tc < 3; tc++) {
+                  if (r === tr && c === tc) continue;
+                  if (canPlaceOnCell(tr, tc, top.size)) {
+                    moves.push({
+                      from: { type: 'board', r: r, c: c, size: top.size },
+                      to: { r: tr, c: tc },
+                      player: player
+                    });
+                  }
+                }
+              }
+            }
+          }
+        }
+        return moves;
+      }
+
+      function applyTempMove(m) {
+        if (m.from.type === 'hand') {
+          board[m.to.r][m.to.c].push({ player: m.player, size: m.from.size });
+        } else {
+          const piece = board[m.from.r][m.from.c].pop();
+          board[m.to.r][m.to.c].push(piece);
+        }
+      }
+
+      function revertTempMove(m) {
+        if (m.from.type === 'hand') {
+          board[m.to.r][m.to.c].pop();
+        } else {
+          const piece = board[m.to.r][m.to.c].pop();
+          board[m.from.r][m.from.c].push(piece);
+        }
+      }
+
+      function findWinningThreats(player) {
+        const threats = [];
+        for (const line of WIN_LINES) {
+          let count = 0;
+          let emptyCell = null;
+          for (const [r, c] of line) {
+            const top = board[r][c].at(-1);
+            if (top && top.player === player) {
+              count++;
+            } else if (!top || top.size < 3) {
+              emptyCell = { r, c };
+            }
+          }
+          if (count === 2 && emptyCell) {
+            threats.push(emptyCell);
+          }
+        }
+        return threats;
+      }
+
       function render() {
         const isConnected = bridge.isConnected();
-        const isMyTurn = (!isConnected || currentTurn === myPlayer) && !isGameOver;
+        const isHumanTurn = (!isConnected && !vsCpu) || (vsCpu && currentTurn === P1) || (isConnected && currentTurn === myPlayer);
         const activePlayer = isConnected ? myPlayer : currentTurn;
 
-        // ステータス更新
         if (!isGameOver) {
-          if (!isConnected) {
-            turnBadge.textContent = `⏳ 待機中 (一人練習中: ${currentTurn === P1 ? 'オレンジ' : 'ブルー'})`;
-            turnBadge.style.color = currentTurn === P1 ? '#f97316' : '#38bdf8';
-          } else if (currentTurn === P1) {
-            turnBadge.textContent = myPlayer === P1 ? '🟢 あなたの手番 (オレンジ)' : '相手の考え中… (オレンジ)';
+          if (currentTurn === P1) {
+            turnBadge.textContent = '🟠 あなたの手番 (オレンジ)';
             turnBadge.style.color = '#f97316';
           } else {
-            turnBadge.textContent = myPlayer === P2 ? '🟢 あなたの手番 (ブルー)' : '相手の考え中… (ブルー)';
+            turnBadge.textContent = vsCpu ? '🔵 CPU の考え中… (ブルー)' : '🔵 相手の手番 (ブルー)';
             turnBadge.style.color = '#38bdf8';
           }
 
-          if (isMyTurn) {
+          if (isHumanTurn) {
             hintEl.textContent = selectedPiece ? '置くマスをクリックしてください' : '手持ちまたは盤面のコマを選んでください';
           } else {
             hintEl.textContent = '相手がコマを選んでいます…';
           }
         }
 
-        // 手持ちエリアの描画
-        renderHand(P1, p1PiecesEl, isMyTurn && currentTurn === P1, activePlayer);
-        renderHand(P2, p2PiecesEl, isMyTurn && currentTurn === P2, activePlayer);
+        renderHand(P1, p1PiecesEl, isHumanTurn && currentTurn === P1, activePlayer);
+        renderHand(P2, p2PiecesEl, !vsCpu && isHumanTurn && currentTurn === P2, activePlayer);
 
-        // 3×3 盤面の描画
         gridEl.innerHTML = '';
         for (let r = 0; r < 3; r++) {
           for (let c = 0; c < 3; c++) {
@@ -251,13 +410,11 @@
             const stack = board[r][c];
             const top = stack.at(-1);
 
-            // コマの表示（一番上のみ表示）
             if (top) {
               const pieceEl = createPieceElement(top.player, top.size);
               cell.appendChild(pieceEl);
 
-              // 盤面上の自分のコマをクリックして移動元として選択
-              if (isMyTurn && (top.player === activePlayer)) {
+              if (isHumanTurn && (top.player === activePlayer)) {
                 cell.addEventListener('click', (e) => {
                   e.stopPropagation();
                   if (selectedPiece && selectedPiece.type === 'board' && selectedPiece.r === r && selectedPiece.c === c) {
@@ -270,8 +427,7 @@
               }
             }
 
-            // 選択中のコマがある場合、配置可能か判定
-            if (isMyTurn && selectedPiece) {
+            if (isHumanTurn && selectedPiece) {
               const isSource = selectedPiece.type === 'board' && selectedPiece.r === r && selectedPiece.c === c;
               if (isSource) {
                 cell.classList.add('selected-source');
@@ -291,11 +447,6 @@
           }
         }
       }
-
-      bridge.onPlayerJoined(() => {
-        initGame();
-        bridge.showToast('対戦相手が合流しました！ゴブレット開始！');
-      });
 
       function renderHand(player, containerEl, isSelectable, activePlayer = myPlayer) {
         containerEl.innerHTML = '';
@@ -321,7 +472,7 @@
             if (isSelectable) {
               slot.addEventListener('click', () => {
                 if (selectedPiece && selectedPiece.type === 'hand' && selectedPiece.size === size && selectedPiece.player === player) {
-                  selectedPiece = null; // 解除
+                  selectedPiece = null;
                 } else {
                   selectedPiece = { type: 'hand', size: size, player: player };
                 }
@@ -343,26 +494,36 @@
         return el;
       }
 
-      // P2Pパケット受信
+      bridge.onPlayerJoined(() => {
+        vsCpu = false;
+        modeBtn.textContent = '👥 2人対戦';
+        initGame();
+        bridge.showToast('対戦相手が合流しました！ゴブレット開始！');
+      });
+
       bridge.onReceive((data) => {
         if (data.game !== 'gobblet') return;
         if (data.type === 'move') {
           executeMove(data.move, false);
         } else if (data.type === 'restart') {
           initGame();
-          bridge.showToast('ゴブレットゴブラーズの再戦が開始されました！');
+          bridge.showToast('再戦が開始されました！');
         }
       });
 
       restartBtn.addEventListener('click', () => {
         initGame();
-        bridge.send({ game: 'gobblet', type: 'restart' });
+        if (bridge.isConnected()) {
+          bridge.send({ game: 'gobblet', type: 'restart' });
+        }
         bridge.showToast('再戦を開始しました！');
       });
 
       initGame();
-    },
 
-    unmount() {}
+      return () => {
+        isDestroyed = true;
+      };
+    }
   });
 })();

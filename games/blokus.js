@@ -66,6 +66,7 @@
       let currentTurn = P1;
       const myPlayer = bridge.isHost ? P1 : P2;
       let isGameOver = false;
+      let vsCpu = !bridge.isConnected();
 
       // 選択中ピース状態
       let selectedPieceId = null;
@@ -81,7 +82,10 @@
               <span class="blk-sc-vs">vs</span>
               <span class="blk-sc p2">橙: <span id="blk-p2-sc">0</span>マス</span>
             </div>
-            <button id="blk-pass-btn" class="btn btn-sm btn-subtle" title="置ける場所がない場合はパス">パス</button>
+            <div style="display: flex; gap: 6px;">
+              <button id="blk-cpu-btn" class="btn btn-sm btn-subtle" title="CPU対戦の切替">🤖 CPU: ON</button>
+              <button id="blk-pass-btn" class="btn btn-sm btn-subtle" title="置ける場所がない場合はパス">パス</button>
+            </div>
           </div>
 
           <!-- 14×14 盤面 -->
@@ -117,6 +121,7 @@
       const turnBadge = container.querySelector('#blk-turn-badge');
       const p1ScEl = container.querySelector('#blk-p1-sc');
       const p2ScEl = container.querySelector('#blk-p2-sc');
+      const cpuBtn = container.querySelector('#blk-cpu-btn');
       const passBtn = container.querySelector('#blk-pass-btn');
       const rotateBtn = container.querySelector('#blk-rotate-btn');
       const flipBtn = container.querySelector('#blk-flip-btn');
@@ -258,6 +263,102 @@
         return touchesCorner;
       }
 
+      // ピースの全変形パターン (回転・反転) を取得
+      function getAllVariants(baseShape) {
+        const variants = [];
+        const seen = new Set();
+        let cur = baseShape;
+        for (let flip = 0; flip < 2; flip++) {
+          for (let rot = 0; rot < 4; rot++) {
+            const key = JSON.stringify(cur);
+            if (!seen.has(key)) {
+              seen.add(key);
+              variants.push(cur);
+            }
+            cur = rotateShape(cur);
+          }
+          cur = flipShape(baseShape);
+        }
+        return variants;
+      }
+
+      // CPU (P2: 橙) の思考＆配置ルーチン
+      let cpuThinking = false;
+      function triggerCpuMove() {
+        if (cpuThinking || isGameOver || currentTurn !== P2) return;
+        cpuThinking = true;
+        turnBadge.textContent = '🤖 CPU (橙) 思考中…';
+        turnBadge.style.color = '#fb923c';
+
+        setTimeout(() => {
+          if (isGameOver || currentTurn !== P2) {
+            cpuThinking = false;
+            return;
+          }
+
+          // 手持ちピースをマス数の大きい順（5マス→1マス）で並べ替え
+          const myPieces = PIECE_DEFINITIONS
+            .filter(p => availablePieces[P2].has(p.id))
+            .sort((a, b) => countBlocks(b.shape) - countBlocks(a.shape));
+
+          let bestMoves = [];
+          let bestScore = -Infinity;
+
+          for (const piece of myPieces) {
+            const variants = getAllVariants(piece.shape);
+            const blocks = countBlocks(piece.shape);
+
+            for (const shape of variants) {
+              const rows = shape.length;
+              const cols = shape[0].length;
+
+              for (let r = 0; r <= BOARD_SIZE - rows; r++) {
+                for (let c = 0; c <= BOARD_SIZE - cols; c++) {
+                  if (canPlacePiece(r, c, shape, P2)) {
+                    // スコアリング
+                    // 1. ブロック数重視 (大ピースを消費)
+                    let score = blocks * 100;
+
+                    // 2. 盤面中央 (7, 7) への接近
+                    const midDist = Math.abs((r + rows / 2) - 7) + Math.abs((c + cols / 2) - 7);
+                    score += (14 - midDist) * 4;
+
+                    // 3. 相手の陣地 (4, 4) 方向への前進
+                    const oppDist = Math.abs((r + rows / 2) - 4) + Math.abs((c + cols / 2) - 4);
+                    score += (20 - oppDist) * 3;
+
+                    if (score > bestScore) {
+                      bestScore = score;
+                      bestMoves = [{ r, c, shape, pieceId: piece.id }];
+                    } else if (score === bestScore) {
+                      bestMoves.push({ r, c, shape, pieceId: piece.id });
+                    }
+                  }
+                }
+              }
+            }
+
+            // 大きいピースで合法手が見つかったら、より小さいピースは無理に探さず確定して高速化
+            if (bestMoves.length > 0 && blocks >= 4) {
+              break;
+            }
+          }
+
+          cpuThinking = false;
+
+          if (bestMoves.length > 0) {
+            const pick = bestMoves[Math.floor(Math.random() * bestMoves.length)];
+            placePiece(pick.r, pick.c, pick.shape, pick.pieceId, P2, bridge.isConnected());
+            bridge.showToast(`🤖 CPUがピース【${pick.pieceId}】を配置しました`);
+          } else {
+            // パス
+            bridge.showToast('🤖 CPUが置ける場所がないためパスしました');
+            currentTurn = P1;
+            render();
+          }
+        }, 500);
+      }
+
       // 着手実行
       function placePiece(r, c, shape, pieceId, player, isLocal = false) {
         const rows = shape.length;
@@ -294,6 +395,11 @@
         updateScores();
         checkGameOver();
         render();
+
+        // CPU手番トリガー
+        if (vsCpu && currentTurn === P2 && !isGameOver) {
+          triggerCpuMove();
+        }
       }
 
       function updateScores() {
@@ -333,13 +439,29 @@
       // 描画
       function render() {
         const isConnected = bridge.isConnected();
-        const isMyTurn = (!isConnected || currentTurn === myPlayer) && !isGameOver;
-        const activePlayer = isConnected ? myPlayer : currentTurn;
+        const isMyTurn = (!isConnected ? (!vsCpu || currentTurn === P1) : (currentTurn === myPlayer)) && !isGameOver;
+        const activePlayer = !isConnected ? (vsCpu ? P1 : currentTurn) : myPlayer;
+
+        // CPUボタン表示更新
+        if (cpuBtn) {
+          cpuBtn.textContent = vsCpu ? '🤖 CPU: ON' : '👥 2人対戦';
+          cpuBtn.style.color = vsCpu ? '#38bdf8' : '#94a3b8';
+        }
 
         // ターンバッジ
         if (!isConnected) {
-          turnBadge.textContent = `⏳ 待機中 (一人練習中: ${currentTurn === P1 ? '紫' : '橙'})`;
-          turnBadge.style.color = currentTurn === P1 ? '#c084fc' : '#fb923c';
+          if (vsCpu) {
+            if (currentTurn === P1) {
+              turnBadge.textContent = '🟢 あなたの手番 (紫)';
+              turnBadge.style.color = '#c084fc';
+            } else {
+              turnBadge.textContent = '🤖 CPU (橙) 思考中…';
+              turnBadge.style.color = '#fb923c';
+            }
+          } else {
+            turnBadge.textContent = `⏳ 2人対戦中 (${currentTurn === P1 ? '紫' : '橙'}の手番)`;
+            turnBadge.style.color = currentTurn === P1 ? '#c084fc' : '#fb923c';
+          }
         } else if (currentTurn === P1) {
           turnBadge.textContent = myPlayer === P1 ? '🟢 あなたの手番 (紫)' : '相手の考え中… (紫)';
           turnBadge.style.color = '#c084fc';
@@ -505,6 +627,18 @@
       }
       window.addEventListener('keydown', onKeyDown);
 
+      // CPUトグルボタン
+      if (cpuBtn) {
+        cpuBtn.addEventListener('click', () => {
+          vsCpu = !vsCpu;
+          bridge.showToast(vsCpu ? '🤖 CPU対戦モードに切り替えました' : '👥 2人対戦モードに切り替えました');
+          render();
+          if (vsCpu && currentTurn === P2 && !isGameOver) {
+            triggerCpuMove();
+          }
+        });
+      }
+
       // パスボタン
       passBtn.addEventListener('click', () => {
         const isConnected = bridge.isConnected();
@@ -517,6 +651,10 @@
           }
           bridge.showToast('パスしました');
           render();
+
+          if (vsCpu && currentTurn === P2 && !isGameOver) {
+            triggerCpuMove();
+          }
         }
       });
 

@@ -1,22 +1,13 @@
 /**
- * 🏛️ クアルト (Quarto) Component
+ * 🏛️ クアルト (Quarto) Component - CPU対戦完備版
  * Board Arena Plugin
- * 
- * メンサ推薦・世界的受賞歴多数の超傑作！
- * 「自分が置くコマは、相手が選ぶ！」
- * 共通の属性（色・形・高さ・穴）を4つ先に一列揃えたプレイヤーの勝利！
  */
 
 (function () {
   const SIZE = 4;
-  const P1 = 1;
-  const P2 = 2;
+  const P1 = 1; // あなた
+  const P2 = 2; // CPU / 相手
 
-  // 16個のピース定義 (4属性: color, shape, height, hole)
-  // color: 'light'(0) / 'dark'(1)
-  // shape: 'round'(0) / 'square'(1)
-  // height: 'short'(0) / 'tall'(1)
-  // hole: 'solid'(0) / 'hollow'(1)
   const PIECES = [];
   for (let c = 0; c < 2; c++) {
     for (let s = 0; s < 2; s++) {
@@ -39,26 +30,31 @@
     name: 'クアルト (Quarto)',
     icon: '🏛️',
     category: '推理・パズル',
-    minPlayers: 2,
+    minPlayers: 1,
     maxPlayers: 2,
-    description: '「自分が置くコマは相手が決める！」色・形・高さ・穴の共通点を4つ揃えろ！世界最高峰の心理戦！',
+    description: '「自分が置くコマは相手が決める！」色・形・高さ・穴の共通点を4つ揃えろ！世界最高峰の心理戦！CPU対戦付き！',
 
     mount(container, bridge) {
+      let isDestroyed = false;
       let board = Array(SIZE).fill(null).map(() => Array(SIZE).fill(null));
       let availablePieces = new Set(PIECES.map(p => p.id));
-      let selectedPieceForOpponent = null; // 相手に渡すために選んだピース
-      let activePieceToPlace = null;       // 今自分が盤面に置くべきピース
+      let selectedPieceForOpponent = null;
+      let activePieceToPlace = null;
       let currentTurn = P1;
-      let step = 'PLACE'; // 'PLACE' (コマ配置) | 'GIVE' (相手にコマを渡す)
+      let step = 'GIVE'; // 最初は相手に渡すコマを選ぶ
       let isGameOver = false;
       let winningLine = [];
-      let myPlayer = bridge.isHost ? P1 : P2;
+      let vsCpu = !bridge.isConnected();
+      let myPlayer = P1;
 
       // HTML UI
       container.innerHTML = `
         <div class="qrt-wrapper">
           <div class="qrt-status-bar">
-            <div class="turn-badge" id="qrt-turn-badge">P1の手番です</div>
+            <div class="qrt-turn-group">
+              <span class="turn-badge" id="qrt-turn-badge">P1の手番です</span>
+              <button id="qrt-mode-btn" class="btn btn-sm btn-subtle qrt-mode-btn">${vsCpu ? '🤖 CPU対戦中' : '👥 2人対戦'}</button>
+            </div>
             <div class="active-piece-box" id="qrt-active-box">
               置くコマ: <span id="active-piece-display">なし</span>
             </div>
@@ -69,7 +65,7 @@
             <div class="qrt-board" id="qrt-board"></div>
           </div>
 
-          <!-- 手駒プール (未配置のコマ一覧) -->
+          <!-- 手駒プール -->
           <div class="qrt-pool-card">
             <div class="pool-header" id="qrt-pool-header">相手に渡すコマを選んでください:</div>
             <div class="qrt-pool" id="qrt-pool"></div>
@@ -83,171 +79,44 @@
         </div>
       `;
 
-      // スタイル定義
       if (!document.getElementById('quarto-custom-css')) {
         const style = document.createElement('style');
         style.id = 'quarto-custom-css';
         style.textContent = `
-          .qrt-wrapper {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            gap: 12px;
-            width: 100%;
-            max-width: 540px;
-            margin: 0 auto;
-            user-select: none;
-            color: #f1f5f9;
-          }
-
-          .qrt-status-bar {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            width: 100%;
-            background: #18202c;
-            padding: 8px 16px;
-            border-radius: 8px;
-            border: 1px solid #2b384a;
-          }
-
-          .active-piece-box {
-            font-size: 13px;
-            font-weight: 700;
-            color: #f59e0b;
-            display: flex;
-            align-items: center;
-            gap: 6px;
-          }
-
-          /* 盤面フレーム (円形木製ボード) */
-          .qrt-board-frame {
-            background: linear-gradient(135deg, #78350f, #451a03);
-            border: 6px solid #92400e;
-            border-radius: 50%;
-            padding: 24px;
-            box-shadow: 0 12px 28px rgba(0, 0, 0, 0.6);
-            aspect-ratio: 1;
-            width: 340px;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-          }
-
-          .qrt-board {
-            display: grid;
-            grid-template-columns: repeat(4, 1fr);
-            grid-template-rows: repeat(4, 1fr);
-            gap: 8px;
-            width: 100%;
-            height: 100%;
-          }
-
-          .qrt-cell {
-            background: #271206;
-            border-radius: 50%;
-            box-shadow: inset 0 4px 8px rgba(0, 0, 0, 0.7);
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            cursor: pointer;
-            transition: background 0.15s, transform 0.15s;
-          }
-          .qrt-cell:hover:not(.occupied) {
-            background: #3b1d09;
-            transform: scale(1.06);
-          }
-          .qrt-cell.win-highlight {
-            box-shadow: 0 0 15px #f59e0b, inset 0 0 8px #f59e0b !important;
-          }
-
-          /* コマのビジュアル */
-          .qrt-piece {
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.4), inset 0 2px 3px rgba(255, 255, 255, 0.3);
-            position: relative;
-            cursor: pointer;
-            transition: transform 0.15s ease;
-          }
-          .qrt-piece:hover {
-            transform: scale(1.12);
-          }
-
-          /* 色 */
+          .qrt-wrapper { display: flex; flex-direction: column; align-items: center; gap: 10px; width: 100%; max-width: 520px; margin: 0 auto; user-select: none; color: #f1f5f9; }
+          .qrt-status-bar { width: 100%; display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; flex-wrap: wrap; gap: 8px; }
+          .qrt-turn-group { display: flex; align-items: center; gap: 8px; }
+          .turn-badge { font-size: 13px; font-weight: 700; background: #1e293b; padding: 5px 12px; border-radius: 8px; border: 1px solid #334155; }
+          .qrt-mode-btn { font-size: 11px; font-weight: 700; background: #1e293b; border: 1px solid #3b82f6; color: #38bdf8; padding: 4px 8px; border-radius: 6px; cursor: pointer; }
+          .active-piece-box { font-size: 13px; font-weight: 700; color: #fbbf24; background: #1e293b; padding: 4px 10px; border-radius: 8px; border: 1px solid #334155; display: flex; align-items: center; gap: 6px; }
+          .qrt-board-frame { width: 100%; aspect-ratio: 1; padding: 12px; background: #451a03; border: 6px solid #78350f; border-radius: 16px; box-shadow: 0 14px 34px rgba(0,0,0,0.6); }
+          .qrt-board { width: 100%; height: 100%; background: #271206; display: grid; grid-template-columns: repeat(4, 1fr); grid-template-rows: repeat(4, 1fr); gap: 6px; border: 2px solid #5a2608; border-radius: 8px; padding: 6px; }
+          .qrt-cell { background: #5c2b09; border-radius: 8px; display: flex; justify-content: center; align-items: center; cursor: pointer; transition: all 0.15s; }
+          .qrt-cell:hover:not(.occupied) { background: #78350f; transform: scale(1.04); }
+          .qrt-cell.win-highlight { box-shadow: 0 0 15px #f59e0b, inset 0 0 8px #f59e0b !important; }
+          .qrt-piece { display: flex; justify-content: center; align-items: center; box-shadow: 0 4px 8px rgba(0, 0, 0, 0.4), inset 0 2px 3px rgba(255, 255, 255, 0.3); position: relative; cursor: pointer; transition: transform 0.15s; }
+          .qrt-piece:hover { transform: scale(1.1); }
           .qrt-piece.light { background: #fde68a; border: 2px solid #f59e0b; color: #78350f; }
           .qrt-piece.dark { background: #334155; border: 2px solid #1e293b; color: #94a3b8; }
-
-          /* 形状 */
           .qrt-piece.round { border-radius: 50%; }
           .qrt-piece.square { border-radius: 6px; }
-
-          /* 高さ */
-          .qrt-piece.tall { width: 50px; height: 50px; font-size: 14px; }
-          .qrt-piece.short { width: 36px; height: 36px; font-size: 11px; }
-
-          /* 穴 */
-          .qrt-piece.hollow::after {
-            content: '';
-            width: 40%;
-            height: 40%;
-            background: #0f172a;
-            border-radius: 50%;
-            position: absolute;
-            box-shadow: inset 0 2px 4px rgba(0,0,0,0.8);
-          }
-
-          /* コマプール (未配置エリア) */
-          .qrt-pool-card {
-            width: 100%;
-            background: #18202c;
-            border: 1px solid #2b384a;
-            border-radius: 10px;
-            padding: 10px 14px;
-            display: flex;
-            flex-direction: column;
-            gap: 8px;
-          }
-          .pool-header {
-            font-size: 13px;
-            font-weight: 700;
-            color: #94a3b8;
-          }
-          .qrt-pool {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 8px;
-            justify-content: center;
-            min-height: 60px;
-          }
-
-          .qrt-pool .qrt-piece.selected {
-            box-shadow: 0 0 14px #38bdf8 !important;
-            transform: scale(1.18);
-          }
-
-          /* 結果バナー */
-          .qrt-result-banner {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            width: 100%;
-            background: #1e293b;
-            border: 2px solid #10b981;
-            padding: 12px 20px;
-            border-radius: 10px;
-            font-weight: 700;
-          }
+          .qrt-piece.tall { width: 48px; height: 48px; }
+          .qrt-piece.short { width: 34px; height: 34px; }
+          .qrt-piece.hollow::after { content: ''; width: 40%; height: 40%; background: #0f172a; border-radius: 50%; position: absolute; box-shadow: inset 0 2px 4px rgba(0,0,0,0.8); }
+          .qrt-pool-card { width: 100%; background: #18202c; border: 1px solid #2b384a; border-radius: 10px; padding: 8px 12px; display: flex; flex-direction: column; gap: 6px; }
+          .pool-header { font-size: 12px; font-weight: 700; color: #94a3b8; }
+          .qrt-pool { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; min-height: 55px; }
+          .qrt-pool .qrt-piece.selected { box-shadow: 0 0 14px #38bdf8 !important; transform: scale(1.15); }
+          .qrt-result-banner { margin-top: 10px; display: flex; align-items: center; justify-content: space-between; width: 100%; background: #1e293b; border: 2px solid #10b981; padding: 10px 16px; border-radius: 8px; font-weight: 700; }
           .qrt-result-banner.hidden { display: none; }
         `;
         document.head.appendChild(style);
       }
 
-      // 要素
       const boardEl = container.querySelector('#qrt-board');
       const poolEl = container.querySelector('#qrt-pool');
       const turnBadge = container.querySelector('#qrt-turn-badge');
+      const modeBtn = container.querySelector('#qrt-mode-btn');
       const activeDisplay = container.querySelector('#active-piece-display');
       const poolHeader = container.querySelector('#qrt-pool-header');
       const resBanner = container.querySelector('#qrt-result-banner');
@@ -258,7 +127,7 @@
         board = Array(SIZE).fill(null).map(() => Array(SIZE).fill(null));
         availablePieces = new Set(PIECES.map(p => p.id));
         currentTurn = P1;
-        step = 'GIVE'; // 最初の手番は相手に渡すコマを選ぶ
+        step = 'GIVE';
         activePieceToPlace = null;
         selectedPieceForOpponent = null;
         isGameOver = false;
@@ -267,38 +136,48 @@
         render();
       }
 
+      modeBtn.addEventListener('click', () => {
+        if (bridge.isConnected()) {
+          bridge.showToast('オンライン対戦中はCPUモードに切り替えられません');
+          return;
+        }
+        vsCpu = !vsCpu;
+        modeBtn.textContent = vsCpu ? '🤖 CPU対戦中' : '👥 2人対戦';
+        bridge.showToast(vsCpu ? '🤖 CPU対戦モードに切り替えました！' : '👥 2人対戦モードに切り替えました！');
+        render();
+        if (vsCpu && currentTurn === P2 && !isGameOver) {
+          triggerCpuAction();
+        }
+      });
+
       function render() {
         const isConnected = bridge.isConnected();
-        const isMyTurn = (!isConnected || currentTurn === myPlayer) && !isGameOver;
+        const isHumanTurn = (!isConnected && !vsCpu) || (vsCpu && currentTurn === P1) || (isConnected && currentTurn === myPlayer);
 
-        // ステータス
         if (!isGameOver) {
-          if (!isConnected) {
-            turnBadge.textContent = `⏳ 待機中 (一人練習中: ${currentTurn === P1 ? 'P1' : 'P2'})`;
-          } else if (currentTurn === P1) {
-            turnBadge.textContent = myPlayer === P1 ? '🟢 あなたの手番 (P1)' : '相手の手番中… (P1)';
+          if (currentTurn === P1) {
+            turnBadge.textContent = '🟢 あなたの手番 (P1)';
+            turnBadge.style.color = '#38bdf8';
           } else {
-            turnBadge.textContent = myPlayer === P2 ? '🟢 あなたの手番 (P2)' : '相手の手番中… (P2)';
+            turnBadge.textContent = vsCpu ? '🤖 CPU の考え中… (P2)' : '🔴 相手の手番 (P2)';
+            turnBadge.style.color = '#f87171';
           }
 
           if (step === 'PLACE') {
-            poolHeader.textContent = '【配置】盤面の空きマスをクリックしてコマを置いてください';
+            poolHeader.textContent = isHumanTurn ? '【配置】盤面の空きマスをクリックしてコマを置いてください' : '相手がコマを盤面に配置しています…';
           } else {
-            poolHeader.textContent = isMyTurn ? '👉 相手に渡すコマを下のプールから1つ選んでください！' : '相手があなたに渡すコマを選んでいます…';
+            poolHeader.textContent = isHumanTurn ? '👉 相手に渡すコマを下のプールから1つ選んでください！' : '相手があなたに渡すコマを選んでいます…';
           }
         }
 
-        // 置くべきアクティブピースの表示
         activeDisplay.innerHTML = '';
         if (activePieceToPlace !== null) {
           const piece = PIECES[activePieceToPlace];
-          const el = createPieceEl(piece);
-          activeDisplay.appendChild(el);
+          activeDisplay.appendChild(createPieceEl(piece));
         } else {
           activeDisplay.textContent = 'なし (選択中)';
         }
 
-        // 4×4 盤面描画
         boardEl.innerHTML = '';
         for (let r = 0; r < SIZE; r++) {
           for (let c = 0; c < SIZE; c++) {
@@ -314,33 +193,27 @@
               }
               cell.appendChild(pEl);
             } else {
-              // 空きマスへの配置
               cell.addEventListener('click', () => {
-                if (isMyTurn && step === 'PLACE' && activePieceToPlace !== null && !isGameOver) {
+                if (isHumanTurn && step === 'PLACE' && activePieceToPlace !== null && !isGameOver) {
                   placePiece(r, c, activePieceToPlace, isConnected);
                 }
               });
             }
-
             boardEl.appendChild(cell);
           }
         }
 
-        // コマプール描画
         poolEl.innerHTML = '';
         availablePieces.forEach(id => {
           const piece = PIECES[id];
           const pEl = createPieceEl(piece);
-          if (selectedPieceForOpponent === id) {
-            pEl.classList.add('selected');
-          }
+          if (selectedPieceForOpponent === id) pEl.classList.add('selected');
 
           pEl.addEventListener('click', () => {
-            if (isMyTurn && step === 'GIVE' && !isGameOver) {
+            if (isHumanTurn && step === 'GIVE' && !isGameOver) {
               givePieceToOpponent(id, isConnected);
             }
           });
-
           poolEl.appendChild(pEl);
         });
       }
@@ -351,7 +224,6 @@
         return el;
       }
 
-      // コマを盤面に置く
       function placePiece(r, c, pieceId, isLocal = false) {
         board[r][c] = pieceId;
         availablePieces.delete(pieceId);
@@ -361,15 +233,15 @@
           bridge.send({ game: 'quarto', type: 'place', r, c, pieceId });
         }
 
-        // クアルト（勝利）チェック
         const win = checkQuarto();
         if (win) {
           isGameOver = true;
           winningLine = win.line;
-          const winnerName = currentTurn === P1 ? 'P1' : 'P2';
-          resText.textContent = `🎉 クアルト成立！！ ${winnerName} の勝利！！ (${win.traitName}が4連)`;
+          const winnerName = currentTurn === P1 ? '🎉 あなた (P1) の勝利！' : (vsCpu ? '💀 CPU (P2) の勝利！' : '🎉 P2 の勝利！');
+          resText.textContent = `クアルト成立！！ ${winnerName} (${win.traitName}が4連)`;
           resBanner.classList.remove('hidden');
-          bridge.showToast(`クアルト成立！${winnerName}の勝利！`);
+          bridge.showToast(`クアルト成立！${winnerName}`);
+          if (currentTurn === P1) bridge.recordWin();
           render();
           return;
         }
@@ -382,13 +254,14 @@
           return;
         }
 
-        // 次は相手に渡すコマを選ぶフェーズへ
         step = 'GIVE';
-        bridge.showToast('コマを配置しました。相手に渡すコマを選んでください！');
         render();
+
+        if (vsCpu && currentTurn === P2 && !isGameOver) {
+          triggerCpuAction();
+        }
       }
 
-      // 相手にコマを渡す
       function givePieceToOpponent(pieceId, isLocal = false) {
         activePieceToPlace = pieceId;
         step = 'PLACE';
@@ -398,19 +271,83 @@
           bridge.send({ game: 'quarto', type: 'give', pieceId });
         }
 
-        bridge.showToast('相手にコマを渡しました！ターン交代！');
         render();
+
+        if (vsCpu && currentTurn === P2 && !isGameOver) {
+          triggerCpuAction();
+        }
       }
 
-      // クアルト判定 (4つの属性いずれかが一列揃ったか)
+      // 🧠 思考型クアルトCPU (AI)
+      function triggerCpuAction() {
+        if (isGameOver || isDestroyed) return;
+
+        setTimeout(() => {
+          if (isGameOver || currentTurn !== P2 || isDestroyed) return;
+
+          if (step === 'PLACE' && activePieceToPlace !== null) {
+            // 1. PLACE フェーズ: 空きマスからクアルト成立マスを探索
+            const emptyCells = [];
+            for (let r = 0; r < SIZE; r++) {
+              for (let c = 0; c < SIZE; c++) {
+                if (board[r][c] === null) emptyCells.push({ r, c });
+              }
+            }
+
+            // 即座にクアルトが完成するマスがあれば最優先でそこに置く！
+            let bestCell = null;
+            for (const cell of emptyCells) {
+              board[cell.r][cell.c] = activePieceToPlace;
+              if (checkQuarto()) {
+                bestCell = cell;
+                board[cell.r][cell.c] = null;
+                break;
+              }
+              board[cell.r][cell.c] = null;
+            }
+
+            if (!bestCell) {
+              bestCell = emptyCells[Math.floor(Math.random() * emptyCells.length)];
+            }
+
+            placePiece(bestCell.r, bestCell.c, activePieceToPlace, false);
+
+          } else if (step === 'GIVE') {
+            // 2. GIVE フェーズ: 相手に渡してもクアルトを即成立させられない安全なコマを渡す！
+            const poolArray = Array.from(availablePieces);
+            if (poolArray.length === 0) return;
+
+            let safePiece = null;
+            for (const pId of poolArray) {
+              let causesWin = false;
+              for (let r = 0; r < SIZE; r++) {
+                for (let c = 0; c < SIZE; c++) {
+                  if (board[r][c] === null) {
+                    board[r][c] = pId;
+                    if (checkQuarto()) causesWin = true;
+                    board[r][c] = null;
+                    if (causesWin) break;
+                  }
+                }
+                if (causesWin) break;
+              }
+
+              if (!causesWin) {
+                safePiece = pId;
+                break;
+              }
+            }
+
+            const chosen = safePiece !== null ? safePiece : poolArray[0];
+            givePieceToOpponent(chosen, false);
+          }
+        }, 500);
+      }
+
       function checkQuarto() {
         const lines = [];
-
-        // 行
         for (let r = 0; r < SIZE; r++) lines.push([{r, c:0}, {r, c:1}, {r, c:2}, {r, c:3}]);
-        // 列
         for (let c = 0; c < SIZE; c++) lines.push([{r:0, c}, {r:1, c}, {r:2, c}, {r:3, c}]);
-        // 斜め
         lines.push([{r:0, c:0}, {r:1, c:1}, {r:2, c:2}, {r:3, c:3}]);
         lines.push([{r:0, c:3}, {r:1, c:2}, {r:2, c:1}, {r:3, c:0}]);
 
@@ -455,13 +392,17 @@
       });
 
       bridge.onPlayerJoined(() => {
+        vsCpu = false;
+        modeBtn.textContent = '👥 2人対戦';
         initGame();
         bridge.showToast('対戦相手が合流しました！クアルト開始！');
       });
 
       initGame();
-    },
 
-    unmount() {}
+      return () => {
+        isDestroyed = true;
+      };
+    }
   });
 })();

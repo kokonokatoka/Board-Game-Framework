@@ -1,20 +1,11 @@
 /**
- * 🪨 マンカラ (Mancala / Kalah) Component
+ * 🪨 マンカラ (Mancala / Kalah) Component - CPU対戦完備版
  * Board Arena Plugin
- * 
- * 世界最古の伝統頭脳ゲーム！
- * ポケットの石を時計回りに1個ずつ撒いていき、
- * 自分のストア（ゴール）に最も多くの石を集めたプレイヤーの勝利！
  */
 
 (function () {
-  const P1 = 1; // 下側プレイヤー (ストア: インデックス 6)
-  const P2 = 2; // 上側プレイヤー (ストア: インデックス 13)
-
-  // ピットのインデックス構成:
-  // P2側:  [12] [11] [10] [ 9] [ 8] [ 7]  (上段: 右から左へ進行)
-  // ストア: [13] (P2ゴール)                      [ 6] (P1ゴール)
-  // P1側:  [ 0] [ 1] [ 2] [ 3] [ 4] [ 5]  (下段: 左から右へ進行)
+  const P1 = 1; // 下側プレイヤー (あなた・ストア 6)
+  const P2 = 2; // 上側プレイヤー (CPU/相手・ストア 13)
 
   const P1_POCKETS = [0, 1, 2, 3, 4, 5];
   const P2_POCKETS = [7, 8, 9, 10, 11, 12];
@@ -26,12 +17,12 @@
     name: 'マンカラ (Mancala)',
     icon: '🪨',
     category: '伝統・計算',
-    minPlayers: 2,
+    minPlayers: 1,
     maxPlayers: 2,
-    description: '世界最古の頭脳戦！石を撒いてゴールに集めろ！ピッタリゴールで連続ターン＆横取りが熱い！',
+    description: '世界最古の頭脳戦！石を撒いてゴールに集めろ！ピッタリゴールで連続ターン＆横取りが熱い！CPU対戦付き！',
 
     mount(container, bridge) {
-      // 14ピットの石の数
+      let isDestroyed = false;
       let board = Array(14).fill(4);
       board[P1_STORE] = 0;
       board[P2_STORE] = 0;
@@ -39,13 +30,17 @@
       let currentTurn = P1;
       let isGameOver = false;
       let lastSownPit = -1;
-      let myPlayer = bridge.isHost ? P1 : P2;
+      let vsCpu = !bridge.isConnected();
+      let myPlayer = P1;
 
       // HTMLマークアップ
       container.innerHTML = `
         <div class="mancala-wrapper">
           <div class="mancala-status-bar">
-            <div class="turn-badge" id="mancala-turn-badge">P1の手番です</div>
+            <div class="mancala-turn-group">
+              <span class="turn-badge" id="mancala-turn-badge">P1の手番です</span>
+              <button id="mancala-mode-btn" class="btn btn-sm btn-subtle mancala-mode-btn">${vsCpu ? '🤖 CPU対戦中' : '👥 2人対戦'}</button>
+            </div>
             <div class="mancala-hint" id="mancala-hint">ポケットを選んで石を撒いてください</div>
           </div>
 
@@ -53,7 +48,7 @@
           <div class="mancala-board-frame">
             <!-- P2 (左) ストア -->
             <div class="mancala-store p2-store" id="pit-13">
-              <span class="store-label">P2 ゴール</span>
+              <span class="store-label">${vsCpu ? 'CPU' : '相手'} ゴール</span>
               <span class="pit-count" id="count-13">0</span>
               <div class="stones-container" id="stones-13"></div>
             </div>
@@ -83,7 +78,7 @@
 
             <!-- P1 (右) ストア -->
             <div class="mancala-store p1-store" id="pit-6">
-              <span class="store-label">P1 ゴール</span>
+              <span class="store-label">あなた ゴール</span>
               <span class="pit-count" id="count-6">0</span>
               <div class="stones-container" id="stones-6"></div>
             </div>
@@ -97,166 +92,42 @@
         </div>
       `;
 
-      // スタイル定義
       if (!document.getElementById('mancala-custom-css')) {
         const style = document.createElement('style');
         style.id = 'mancala-custom-css';
         style.textContent = `
-          .mancala-wrapper {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            gap: 12px;
-            width: 100%;
-            max-width: 720px;
-            margin: 0 auto;
-            user-select: none;
-          }
-
-          .mancala-status-bar {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            width: 100%;
-            background: #18202c;
-            padding: 10px 16px;
-            border-radius: 8px;
-            border: 1px solid #2b384a;
-          }
-
-          .mancala-hint {
-            font-size: 13px;
-            color: #94a3b8;
-          }
-
-          /* マンカラ木製ボードデザイン */
-          .mancala-board-frame {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            gap: 12px;
-            background: linear-gradient(135deg, #78350f, #451a03);
-            border: 6px solid #92400e;
-            border-radius: 30px;
-            padding: 20px 16px;
-            box-shadow: 0 15px 30px rgba(0, 0, 0, 0.6), inset 0 2px 5px rgba(255, 255, 255, 0.2);
-            width: 100%;
-          }
-
-          /* ストア (両端の大きな溝) */
-          .mancala-store {
-            width: 80px;
-            height: 180px;
-            background: #271206;
-            border-radius: 40px;
-            box-shadow: inset 0 6px 12px rgba(0, 0, 0, 0.8), 0 1px 1px rgba(255, 255, 255, 0.1);
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            padding: 10px 4px;
-            position: relative;
-          }
-
-          .store-label {
-            font-size: 11px;
-            font-weight: 700;
-            color: #d97706;
-          }
-          .p2-store .store-label { color: #38bdf8; }
-
-          .pit-count {
-            font-size: 18px;
-            font-weight: 800;
-            color: #fef3c7;
-            margin: 4px 0;
-            font-family: monospace;
-          }
-
-          /* 中央 2段 ポケット */
-          .mancala-center-pits {
-            display: flex;
-            flex-direction: column;
-            gap: 16px;
-            flex: 1;
-          }
-
-          .pits-row {
-            display: grid;
-            grid-template-columns: repeat(6, 1fr);
-            gap: 10px;
-          }
-
-          .mancala-pit {
-            aspect-ratio: 1;
-            background: #271206;
-            border-radius: 50%;
-            box-shadow: inset 0 5px 10px rgba(0, 0, 0, 0.8), 0 1px 1px rgba(255, 255, 255, 0.1);
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            cursor: pointer;
-            position: relative;
-            transition: transform 0.15s, box-shadow 0.15s;
-          }
-
-          .mancala-pit.selectable:hover {
-            transform: scale(1.08);
-            box-shadow: inset 0 5px 10px rgba(0, 0, 0, 0.8), 0 0 12px #f59e0b;
-          }
-
-          /* 石の描画コンテナ */
-          .stones-container {
-            display: flex;
-            flex-wrap: wrap;
-            justify-content: center;
-            align-content: center;
-            gap: 2px;
-            width: 80%;
-            height: 55%;
-            overflow: hidden;
-          }
-
-          /* 石 (ガラス玉・おはじき) */
-          .stone {
-            width: 9px;
-            height: 9px;
-            border-radius: 50%;
-            box-shadow: 0 1px 3px rgba(0,0,0,0.5), inset 0 1px 1px rgba(255,255,255,0.8);
-          }
+          .mancala-wrapper { display: flex; flex-direction: column; align-items: center; gap: 10px; width: 100%; max-width: 620px; margin: 0 auto; user-select: none; color: #f1f5f9; }
+          .mancala-status-bar { display: flex; justify-content: space-between; align-items: center; width: 100%; background: #111827; padding: 8px 14px; border-radius: 8px; border: 1px solid #283548; flex-wrap: wrap; gap: 8px; }
+          .mancala-turn-group { display: flex; align-items: center; gap: 8px; }
+          .turn-badge { font-size: 13px; font-weight: 700; background: #1e293b; padding: 5px 12px; border-radius: 8px; border: 1px solid #334155; }
+          .mancala-mode-btn { font-size: 11px; font-weight: 700; background: #1e293b; border: 1px solid #3b82f6; color: #38bdf8; padding: 4px 8px; border-radius: 6px; cursor: pointer; }
+          .mancala-hint { font-size: 12px; color: #94a3b8; }
+          .mancala-board-frame { display: flex; align-items: center; justify-content: space-between; width: 100%; background: #451a03; border: 6px solid #78350f; border-radius: 20px; padding: 14px 10px; box-shadow: 0 16px 36px rgba(0, 0, 0, 0.6); gap: 10px; }
+          .mancala-store { width: 62px; height: 170px; background: #271206; border-radius: 30px; box-shadow: inset 0 6px 12px rgba(0, 0, 0, 0.8), 0 2px 4px rgba(255, 255, 255, 0.1); display: flex; flex-direction: column; align-items: center; justify-content: space-between; padding: 10px 4px; }
+          .p1-store { border: 2px solid #f59e0b; }
+          .p2-store { border: 2px solid #38bdf8; }
+          .store-label { font-size: 10px; font-weight: 700; color: #94a3b8; text-align: center; }
+          .pit-count { font-size: 15px; font-weight: 800; color: #fbbf24; }
+          .mancala-center-pits { display: flex; flex-direction: column; gap: 10px; flex: 1; }
+          .pits-row { display: grid; grid-template-columns: repeat(6, 1fr); gap: 6px; }
+          .mancala-pit { aspect-ratio: 1; background: #271206; border-radius: 50%; box-shadow: inset 0 4px 8px rgba(0, 0, 0, 0.8), 0 1px 2px rgba(255, 255, 255, 0.1); display: flex; flex-direction: column; align-items: center; justify-content: space-between; padding: 5px; cursor: default; transition: transform 0.15s, box-shadow 0.15s; }
+          .mancala-pit.selectable { cursor: pointer; border: 2px solid #f59e0b; }
+          .mancala-pit.selectable:hover { transform: scale(1.08); box-shadow: inset 0 5px 10px rgba(0, 0, 0, 0.8), 0 0 12px #f59e0b; }
+          .stones-container { display: flex; flex-wrap: wrap; justify-content: center; align-content: center; gap: 2px; width: 80%; height: 55%; overflow: hidden; }
+          .stone { width: 8px; height: 8px; border-radius: 50%; box-shadow: 0 1px 3px rgba(0,0,0,0.5), inset 0 1px 1px rgba(255,255,255,0.8); }
           .stone.c1 { background: radial-gradient(circle at 30% 30%, #67e8f9, #0284c7); }
           .stone.c2 { background: radial-gradient(circle at 30% 30%, #fca5a5, #dc2626); }
           .stone.c3 { background: radial-gradient(circle at 30% 30%, #fde047, #ca8a04); }
           .stone.c4 { background: radial-gradient(circle at 30% 30%, #86efac, #16a34a); }
           .stone.c5 { background: radial-gradient(circle at 30% 30%, #d8b4fe, #9333ea); }
-
-          /* 結果バナー */
-          .mancala-result-banner {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            width: 100%;
-            background: #1e293b;
-            border: 2px solid #10b981;
-            padding: 12px 20px;
-            border-radius: 10px;
-            font-weight: 700;
-          }
+          .mancala-result-banner { margin-top: 10px; display: flex; align-items: center; justify-content: space-between; width: 100%; background: #1e293b; border: 2px solid #10b981; padding: 10px 18px; border-radius: 8px; font-weight: 700; }
           .mancala-result-banner.hidden { display: none; }
-
-          @media (max-width: 560px) {
-            .mancala-board-frame { padding: 12px 8px; gap: 6px; }
-            .mancala-store { width: 48px; height: 140px; }
-            .pits-row { gap: 4px; }
-            .pit-count { font-size: 14px; }
-            .stone { width: 6px; height: 6px; }
-          }
         `;
         document.head.appendChild(style);
       }
 
-      // 要素
       const turnBadge = container.querySelector('#mancala-turn-badge');
+      const modeBtn = container.querySelector('#mancala-mode-btn');
       const hintEl = container.querySelector('#mancala-hint');
       const resBanner = container.querySelector('#mancala-result-banner');
       const resText = container.querySelector('#mancala-result-text');
@@ -273,29 +144,36 @@
         render();
       }
 
-      // 描画
+      modeBtn.addEventListener('click', () => {
+        if (bridge.isConnected()) {
+          bridge.showToast('オンライン対戦中はCPUモードに切り替えられません');
+          return;
+        }
+        vsCpu = !vsCpu;
+        modeBtn.textContent = vsCpu ? '🤖 CPU対戦中' : '👥 2人対戦';
+        bridge.showToast(vsCpu ? '🤖 CPU対戦モードに切り替えました！' : '👥 2人対戦モードに切り替えました！');
+        render();
+        if (vsCpu && currentTurn === P2 && !isGameOver) {
+          triggerCpuMove();
+        }
+      });
+
       function render() {
         const isConnected = bridge.isConnected();
-        const isMyTurn = (!isConnected || currentTurn === myPlayer) && !isGameOver;
-        const activePlayer = isConnected ? myPlayer : currentTurn;
+        const isHumanTurn = (!isConnected && !vsCpu) || (vsCpu && currentTurn === P1) || (isConnected && currentTurn === myPlayer);
 
-        // ステータスバッジ
         if (!isGameOver) {
-          if (!isConnected) {
-            turnBadge.textContent = `⏳ 待機中 (一人練習中: ${currentTurn === P1 ? 'P1' : 'P2'})`;
-            turnBadge.style.color = currentTurn === P1 ? '#f59e0b' : '#38bdf8';
-          } else if (currentTurn === P1) {
-            turnBadge.textContent = myPlayer === P1 ? '🟢 あなたの手番 (P1)' : '相手の考え中… (P1)';
+          if (currentTurn === P1) {
+            turnBadge.textContent = '🟡 あなたの手番 (下段)';
             turnBadge.style.color = '#f59e0b';
           } else {
-            turnBadge.textContent = myPlayer === P2 ? '🟢 あなたの手番 (P2)' : '相手の考え中… (P2)';
+            turnBadge.textContent = vsCpu ? '🔵 CPU の考え中… (上段)' : '🔵 相手の手番 (上段)';
             turnBadge.style.color = '#38bdf8';
           }
 
-          hintEl.textContent = isMyTurn ? '石のある自分のポケットを選んでください' : '相手の手を待っています…';
+          hintEl.textContent = isHumanTurn ? '石のある自分のポケットを選んでください' : '相手の手を待っています…';
         }
 
-        // 各ピットの石数とビジュアル描画
         for (let i = 0; i < 14; i++) {
           const countEl = container.querySelector(`#count-${i}`);
           const stonesEl = container.querySelector(`#stones-${i}`);
@@ -314,35 +192,32 @@
             }
           }
 
-          // ポケットの選択可否
           if (pitEl && !pitEl.classList.contains('mancala-store')) {
             const isP1Pit = P1_POCKETS.includes(i);
             const isP2Pit = P2_POCKETS.includes(i);
             const isCurrentPlayerPit = (currentTurn === P1 && isP1Pit) || (currentTurn === P2 && isP2Pit);
-            const canSelect = isMyTurn && isCurrentPlayerPit && board[i] > 0;
+            const canSelect = isHumanTurn && isCurrentPlayerPit && board[i] > 0;
 
             pitEl.classList.toggle('selectable', canSelect);
           }
         }
       }
 
-      // ポケットクリックイベント登録
       [...P1_POCKETS, ...P2_POCKETS].forEach(idx => {
         const el = container.querySelector(`#pit-${idx}`);
         el.addEventListener('click', () => {
           const isConnected = bridge.isConnected();
-          const isMyTurn = (!isConnected || currentTurn === myPlayer) && !isGameOver;
+          const isHumanTurn = (!isConnected && !vsCpu) || (vsCpu && currentTurn === P1) || (isConnected && currentTurn === myPlayer);
           const isP1Pit = P1_POCKETS.includes(idx);
           const isP2Pit = P2_POCKETS.includes(idx);
           const isCurrentPlayerPit = (currentTurn === P1 && isP1Pit) || (currentTurn === P2 && isP2Pit);
 
-          if (isMyTurn && isCurrentPlayerPit && board[idx] > 0 && !isGameOver) {
+          if (isHumanTurn && isCurrentPlayerPit && board[idx] > 0 && !isGameOver) {
             sowStones(idx, isConnected);
           }
         });
       });
 
-      // 石を撒く処理 (Sow Stones)
       function sowStones(startPit, isLocal = false) {
         let stones = board[startPit];
         board[startPit] = 0;
@@ -350,11 +225,8 @@
         let currentPit = startPit;
         const player = currentTurn;
 
-        // 1個ずつ反時計回りに撒く
         while (stones > 0) {
           currentPit = (currentPit + 1) % 14;
-
-          // 相手のストアはスキップ
           if (player === P1 && currentPit === P2_STORE) continue;
           if (player === P2 && currentPit === P1_STORE) continue;
 
@@ -368,8 +240,6 @@
           bridge.send({ game: 'mancala', type: 'move', pit: startPit });
         }
 
-        // ルール判定:
-        // 1. ピッタリゴール (Free Turn)
         const myStore = player === P1 ? P1_STORE : P2_STORE;
         let getsFreeTurn = false;
 
@@ -377,8 +247,6 @@
           getsFreeTurn = true;
           bridge.showToast('🎯 ピッタリゴール！もう1手番！');
         } else {
-          // 2. 横取り (Capture)
-          // 最後に落としたのが「自分の空ポケット」で、かつ落とした後で1個（元は0個）
           const myPockets = player === P1 ? P1_POCKETS : P2_POCKETS;
           if (myPockets.includes(lastSownPit) && board[lastSownPit] === 1) {
             const oppositePit = 12 - lastSownPit;
@@ -392,7 +260,6 @@
           }
         }
 
-        // ゲーム終了判定
         checkGameOver();
 
         if (!isGameOver) {
@@ -402,6 +269,72 @@
         }
 
         render();
+
+        if (vsCpu && currentTurn === P2 && !isGameOver) {
+          triggerCpuMove();
+        }
+      }
+
+      // 🧠 賢い思考型マンカラCPU (AI)
+      function triggerCpuMove() {
+        if (isGameOver || isDestroyed) return;
+
+        setTimeout(() => {
+          if (isGameOver || currentTurn !== P2 || isDestroyed) return;
+
+          const valids = P2_POCKETS.filter(p => board[p] > 0);
+          if (valids.length === 0) return;
+
+          // 1. ピッタリゴール (連続手番) になる手を探す
+          for (const pit of valids) {
+            const count = board[pit];
+            // pit から反時計回りに count 個撒いて、最後が 13 になるか
+            let cur = pit;
+            let remaining = count;
+            while (remaining > 0) {
+              cur = (cur + 1) % 14;
+              if (cur === P1_STORE) continue;
+              remaining--;
+            }
+            if (cur === P2_STORE) {
+              sowStones(pit, false);
+              return;
+            }
+          }
+
+          // 2. 横取りができる手を探す
+          let bestCapturePit = null;
+          let maxCaptured = 0;
+          for (const pit of valids) {
+            const count = board[pit];
+            let cur = pit;
+            let remaining = count;
+            while (remaining > 0) {
+              cur = (cur + 1) % 14;
+              if (cur === P1_STORE) continue;
+              remaining--;
+            }
+            if (P2_POCKETS.includes(cur)) {
+              // 撒いた後で 1個になるか (元が0個)
+              if (board[cur] === 0 || (cur === pit && count >= 13)) {
+                const opp = 12 - cur;
+                if (board[opp] > maxCaptured) {
+                  maxCaptured = board[opp];
+                  bestCapturePit = pit;
+                }
+              }
+            }
+          }
+
+          if (bestCapturePit !== null && maxCaptured > 1) {
+            sowStones(bestCapturePit, false);
+            return;
+          }
+
+          // 3. 石が多いポケット、またはゴールに近いポケットを選択
+          valids.sort((a, b) => board[b] - board[a]);
+          sowStones(valids[0], false);
+        }, 550);
       }
 
       function checkGameOver() {
@@ -410,7 +343,6 @@
 
         if (p1Empty || p2Empty) {
           isGameOver = true;
-          // 残った石をそれぞれのストアに回収
           P1_POCKETS.forEach(i => { board[P1_STORE] += board[i]; board[i] = 0; });
           P2_POCKETS.forEach(i => { board[P2_STORE] += board[i]; board[i] = 0; });
 
@@ -419,9 +351,10 @@
 
           let resMsg = '';
           if (p1Score > p2Score) {
-            resMsg = `🎉 P1 の勝利！ (${p1Score} vs ${p2Score})`;
+            resMsg = `🎉 あなたの勝利！ (${p1Score} vs ${p2Score})`;
+            bridge.recordWin();
           } else if (p2Score > p1Score) {
-            resMsg = `🎉 P2 の勝利！ (${p2Score} vs ${p1Score})`;
+            resMsg = vsCpu ? `💀 CPU の勝利！ (${p2Score} vs ${p1Score})` : `🎉 P2 の勝利！ (${p2Score} vs ${p1Score})`;
           } else {
             resMsg = `🤝 引き分け！ (${p1Score} vs ${p2Score})`;
           }
@@ -432,7 +365,6 @@
         }
       }
 
-      // リスタート
       restartBtn.addEventListener('click', () => {
         initGame();
         if (bridge.isConnected()) {
@@ -440,7 +372,6 @@
         }
       });
 
-      // P2P 受信イベント
       bridge.onReceive((data) => {
         if (data.game !== 'mancala') return;
         if (data.type === 'move') {
@@ -451,18 +382,18 @@
         }
       });
 
-      // 相手合流イベント
       bridge.onPlayerJoined(() => {
+        vsCpu = false;
+        modeBtn.textContent = '👥 2人対戦';
         initGame();
         bridge.showToast('対戦相手が合流しました！マンカラ開始！');
       });
 
-      // 初期化
       initGame();
-    },
 
-    unmount() {
-      // クリーンアップ
+      return () => {
+        isDestroyed = true;
+      };
     }
   });
 })();
