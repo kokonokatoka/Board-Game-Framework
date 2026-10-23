@@ -64,7 +64,7 @@
       };
 
       let currentTurn = P1;
-      const myPlayer = bridge.isHost ? P1 : P2;
+      let myPlayer = bridge.isHost ? P1 : P2;
       let isGameOver = false;
       let vsCpu = !bridge.isConnected();
 
@@ -681,6 +681,8 @@
       });
 
       bridge.onPlayerJoined(() => {
+        myPlayer = bridge.isHost ? P1 : P2;
+        vsCpu = false;
         initGame();
         bridge.showToast('対戦相手が合流しました！ブロックス開始！');
       });

@@ -441,6 +441,77 @@
         }
       });
 
+      bridge.onPlayerJoined(() => {
+        isHost = bridge.isHost;
+        vsCpu = false;
+        modeBtn.textContent = '👥 2人対戦';
+        if (isHost) {
+          startNewRound();
+        }
+        bridge.showToast('対戦相手が合流しました！ポーカー勝負開始！');
+      });
+
+      bridge.onReceive((data) => {
+        if (data.game !== 'poker') return;
+        if (data.type === 'deal') {
+          myCards = data.p2Cards;
+          oppCards = [{ s: 0, r: 2 }, { s: 0, r: 2 }, { s: 0, r: 2 }, { s: 0, r: 2 }, { s: 0, r: 2 }];
+          pot = 20;
+          myChips -= 10;
+          oppChips -= 10;
+          selectedToExchange = [false, false, false, false, false];
+          oppShowdown = false;
+          phase = 'BET1';
+          bannerEl.textContent = '【ベット1】チェックするか、ベット(+20)するか選んでください';
+          showButtons(['check', 'bet', 'fold']);
+          render();
+        } else if (data.type === 'check') {
+          if (phase === 'BET1') {
+            phase = 'DRAW';
+            bannerEl.textContent = '相手がチェックしました。【カード交換】へ進みます';
+            showButtons(['draw']);
+          } else {
+            bridge.send({ game: 'poker', type: 'showdown_cards', cards: myCards });
+            bannerEl.textContent = '相手もチェック！ショーダウン！！';
+          }
+          render();
+        } else if (data.type === 'bet') {
+          oppChips -= 20;
+          pot += 20;
+          bannerEl.textContent = '🔥 相手が【ベット +20】してきました！コールしますか？';
+          showButtons(['call', 'fold']);
+          render();
+        } else if (data.type === 'call') {
+          oppChips -= 20;
+          pot += 20;
+          if (phase === 'BET1') {
+            phase = 'DRAW';
+            bannerEl.textContent = '相手がコールしました！カード交換へ進みます';
+            showButtons(['draw']);
+          } else {
+            bridge.send({ game: 'poker', type: 'showdown_cards', cards: myCards });
+          }
+          render();
+        } else if (data.type === 'fold') {
+          myChips += pot;
+          bannerEl.textContent = '🎉 相手が降りました（フォールド）！あなたの勝利！';
+          showButtons(['next']);
+          bridge.recordWin();
+          render();
+        } else if (data.type === 'showdown_cards') {
+          oppCards = data.cards;
+          if (!oppShowdown) {
+            bridge.send({ game: 'poker', type: 'showdown_reply', cards: myCards });
+            doShowdown();
+          }
+        } else if (data.type === 'showdown_reply') {
+          oppCards = data.cards;
+          doShowdown();
+        } else if (data.type === 'next_round') {
+          if (isHost) startNewRound();
+        }
+      });
+
       startNewRound();
     },
 

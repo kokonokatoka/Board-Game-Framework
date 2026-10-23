@@ -352,6 +352,7 @@
       }
 
       bridge.onPlayerJoined(() => {
+        myPlayer = bridge.isHost ? P1 : P2;
         vsCpu = false;
         modeBtn.textContent = '👥 2人対戦';
         initGame();

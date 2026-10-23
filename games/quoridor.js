@@ -852,6 +852,7 @@
 
       // 相手合流イベント
       bridge.onPlayerJoined(() => {
+        myPlayer = bridge.isHost ? P1 : P2;
         vsCpu = false;
         modeToggleBtn.textContent = '👥 2人対戦';
         initGame();

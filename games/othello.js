@@ -41,7 +41,7 @@
       let currentTurn = BLACK;
       let isGameOver = false;
       let vsCpu = !bridge.isConnected(); // 未接続時はデフォルトでCPU対戦！
-      const myColor = bridge.isHost ? BLACK : WHITE;
+      let myColor = bridge.isHost ? BLACK : WHITE;
 
       // HTMLマークアップ
       container.innerHTML = `
@@ -300,6 +300,7 @@
       }
 
       bridge.onPlayerJoined(() => {
+        myColor = bridge.isHost ? BLACK : WHITE;
         vsCpu = false;
         modeBtn.textContent = '👥 2人対戦';
         initGame();

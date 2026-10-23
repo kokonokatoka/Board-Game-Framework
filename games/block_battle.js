@@ -34,9 +34,9 @@
 
       // 状態管理
       // P1: Host(赤), P2: Guest(青)
-      const isP1 = bridge.isHost;
-      const myRole = isP1 ? 'p1' : 'p2';
-      const oppRole = isP1 ? 'p2' : 'p1';
+      let isP1 = bridge.isHost;
+      let myRole = isP1 ? 'p1' : 'p2';
+      let oppRole = isP1 ? 'p2' : 'p1';
       let vsCpu = !bridge.isConnected(); // 未接続時はCPU対戦有効
 
       let p1Hp = MAX_HP, p2Hp = MAX_HP;
@@ -617,6 +617,15 @@
       retryBtn.addEventListener('click', () => {
         resetMatch();
         bridge.send({ game: 'block_battle_3d', type: 'reset' });
+      });
+
+      bridge.onPlayerJoined(() => {
+        isP1 = bridge.isHost;
+        myRole = isP1 ? 'p1' : 'p2';
+        oppRole = isP1 ? 'p2' : 'p1';
+        vsCpu = false;
+        resetMatch();
+        bridge.showToast('対戦相手が合流しました！3Dブロックバトル開始！');
       });
 
       // --- レンダリングループ ---

@@ -165,7 +165,7 @@
       if (gameId === 'yacht') this.unlockAchievement('play_yacht');
       if (gameId === 'quarto') this.unlockAchievement('play_quarto');
       
-      const brainGames = ['othello', 'gomoku', 'gobblet', 'blokus', 'connect4', 'mancala', 'quoridor', 'checkers', 'quarto'];
+      const brainGames = ['othello', 'gomoku', 'gobblet', 'blokus', 'connect4', 'mancala', 'quoridor', 'checkers', 'quarto', 'block_battle_3d'];
       if (brainGames.includes(gameId)) {
         this.unlockAchievement('brain_master');
       }
@@ -279,7 +279,7 @@
         proTip: 'マス数の多い大きなピースから先に中央へ伸ばし、相手の陣地に入り込んで進路をブロックするのが定石です。'
       }
     },
-    block_battle: {
+    block_battle_3d: {
       category: '⚡ 3D立体陣取り',
       playerTypes: ['solo', 'duo'],
       genre: 'action',
@@ -301,7 +301,7 @@
     },
     poker: {
       category: '🕵️ カード・心理戦',
-      playerTypes: ['duo', 'multi'],
+      playerTypes: ['solo', 'duo', 'multi'],
       genre: 'bluff',
       playTime: '10-20分',
       timeMinutes: 15,
@@ -321,7 +321,7 @@
     },
     codenames: {
       category: '🕵️ 言葉の推理戦',
-      playerTypes: ['duo', 'multi'],
+      playerTypes: ['solo', 'duo', 'multi'],
       genre: 'bluff',
       playTime: '10-15分',
       timeMinutes: 12,
@@ -1045,7 +1045,7 @@
       state.localName = ProfileManager.data.username;
       updatePlayersBar();
       if (state.isConnected) {
-        sendPlatformPacket({ type: 'name_sync', name: state.localName });
+        sendPlatformPacket({ _platform: true, type: 'name_sync', name: state.localName });
       }
     });
   }
@@ -1196,7 +1196,7 @@
         state.isConnected = true;
         setupConnectionEvents();
 
-        sendPlatformPacket({ type: 'name_sync', name: state.localName });
+        sendPlatformPacket({ _platform: true, type: 'name_sync', name: state.localName });
         updatePlayersBar();
         SoundFx.playGameStart();
         showGlobalToast('🎉 対戦相手と合流しました！ゲーム開始！');
@@ -1406,7 +1406,7 @@
       state.isConnected = true;
       if (el.lobbyModal) el.lobbyModal.classList.add('hidden');
 
-      sendPlatformPacket({ type: 'name_sync', name: state.localName });
+      sendPlatformPacket({ _platform: true, type: 'name_sync', name: state.localName });
 
       updatePlayersBar();
       SoundFx.playGameStart();
@@ -1475,8 +1475,8 @@
     ProfileManager.recordMatch(gameId);
 
     const p2pBridge = {
-      isHost: state.isHost,
-      myPlayerIndex: state.myPlayerIndex,
+      get isHost() { return state.isHost; },
+      get myPlayerIndex() { return state.myPlayerIndex; },
       isConnected: () => state.isConnected,
       getRoomCode: () => state.roomCode,
       getLocalName: () => state.localName,

@@ -28,7 +28,7 @@
       let isDestroyed = false;
       let board = [];
       let currentTurn = BLACK;
-      const myColor = bridge.isHost ? BLACK : WHITE;
+      let myColor = bridge.isHost ? BLACK : WHITE;
       let isGameOver = false;
       let vsCpu = !bridge.isConnected();
 
@@ -274,6 +274,7 @@
       }
 
       bridge.onPlayerJoined(() => {
+        myColor = bridge.isHost ? BLACK : WHITE;
         vsCpu = false;
         modeBtn.textContent = '👥 2人対戦';
         initGame();
