@@ -32,6 +32,7 @@
     backBtn: document.getElementById('back-to-catalog-btn'),
     activeGameTitle: document.getElementById('active-game-title'),
     shareRoomBtn: document.getElementById('share-room-btn'),
+    customRoomBtn: document.getElementById('custom-room-btn'),
     
     p1Box: document.getElementById('p1-box'),
     p2Box: document.getElementById('p2-box'),
@@ -91,16 +92,141 @@
     `;
 
     card.addEventListener('click', () => {
-      openLobbyForGame(game.id);
+      // パスワード不要！クリックだけで即座に入場＆自動マッチング
+      autoJoinGame(game.id, 'lobby');
     });
 
     el.gamesGrid.appendChild(card);
   }
 
   // ==========================================
-  // 3. ロビー & モーダル処理
+  // 3. パスワード不要！スマート自動マッチング & ロビー
   // ==========================================
   let selectedGameId = null;
+  let connectTimeout = null;
+
+  // ゲーム選択時：相手がいれば自動合流、いなければ自分がホストになって待機！
+  function autoJoinGame(gameId, roomCode = 'lobby') {
+    selectedGameId = gameId;
+    state.roomCode = roomCode;
+    state.isConnected = false;
+    state.remoteName = '相手を探しています…';
+
+    if (connectTimeout) {
+      clearTimeout(connectTimeout);
+      connectTimeout = null;
+    }
+
+    // まずゲーム画面に入場（一人練習可能）
+    launchGame(selectedGameId);
+    el.lobbyModal.classList.add('hidden');
+
+    el.matchStatusBadge.textContent = '🔍 相手を検索中…';
+    el.matchStatusBadge.style.color = '#38bdf8';
+    showToast('部屋に接続中...');
+
+    if (state.peer) {
+      state.peer.destroy();
+    }
+
+    const targetPeerId = `${PEER_PREFIX}${gameId}-${roomCode}`;
+    let isConnectedOrHost = false;
+
+    // 1. まず一時PeerIDで起動し、待機中ホストがいるか接続を試みる
+    state.peer = new Peer();
+
+    state.peer.on('open', (myTempId) => {
+      el.networkStatus.textContent = '🟢 オンライン';
+      el.networkStatus.classList.add('online');
+
+      // 相手ホストへの接続を試行
+      state.conn = state.peer.connect(targetPeerId, { reliable: true });
+
+      state.conn.on('open', () => {
+        // 相手ホストがいた！自分はゲスト (P2) として合流
+        isConnectedOrHost = true;
+        if (connectTimeout) clearTimeout(connectTimeout);
+
+        state.isHost = false;
+        state.myPlayerIndex = 2;
+        state.isConnected = true;
+        setupConnectionEvents();
+
+        sendPlatformPacket({ type: 'name_sync', name: state.localName });
+        updatePlayersBar();
+        showToast('🎉 対戦相手と合流しました！ゲーム開始！');
+        registeredPlayerJoinedListeners.forEach(listener => listener());
+      });
+
+      state.conn.on('data', (data) => handleIncomingPacket(data));
+      state.conn.on('close', () => {
+        state.isConnected = false;
+        showToast('対戦相手の通信が切断されました');
+        updatePlayersBar();
+      });
+
+      // 1.2秒待って応答がなければ「自分がホスト」に昇格！
+      connectTimeout = setTimeout(() => {
+        if (!isConnectedOrHost && !state.isConnected) {
+          isConnectedOrHost = true;
+          becomeHost(gameId, roomCode);
+        }
+      }, 1200);
+    });
+
+    state.peer.on('error', (err) => {
+      console.log('Peer check status:', err.type);
+      if (err.type === 'peer-unavailable') {
+        // 誰も待っていない ➔ 自分がホストになる！
+        if (!isConnectedOrHost && !state.isConnected) {
+          isConnectedOrHost = true;
+          if (connectTimeout) clearTimeout(connectTimeout);
+          becomeHost(gameId, roomCode);
+        }
+      } else {
+        el.networkStatus.textContent = 'エラー: ' + err.type;
+      }
+    });
+  }
+
+  // ホストとして部屋を開放して待機
+  function becomeHost(gameId, roomCode) {
+    state.isHost = true;
+    state.myPlayerIndex = 1;
+    state.isConnected = false;
+    state.remoteName = '友達待機中…';
+    const targetPeerId = `${PEER_PREFIX}${gameId}-${roomCode}`;
+
+    if (state.peer) state.peer.destroy();
+
+    // オープン部屋のホストIDとして登録
+    state.peer = new Peer(targetPeerId);
+
+    state.peer.on('open', () => {
+      el.networkStatus.textContent = '🟢 オンライン';
+      el.networkStatus.classList.add('online');
+      updatePlayersBar();
+      showToast('🏠 部屋で待機中！友達が入ってきたら自動で開始します');
+    });
+
+    state.peer.on('connection', (connection) => {
+      state.conn = connection;
+      setupConnectionEvents();
+    });
+
+    state.peer.on('error', (err) => {
+      // 稀に同時接続でIDが重複した場合は再接続
+      if (err.type === 'unavailable-id') {
+        setTimeout(() => autoJoinGame(gameId, roomCode), 300);
+      }
+    });
+
+    updatePlayersBar();
+  }
+
+  // ==========================================
+  // 3. ロビー & モーダル処理
+  // ==========================================
 
   function openLobbyForGame(gameId) {
     const game = state.games.get(gameId);
@@ -154,9 +280,15 @@
   // 招待URLコピー
   el.copyInviteUrlBtn.addEventListener('click', () => copyInviteUrl());
   el.shareRoomBtn.addEventListener('click', () => copyInviteUrl());
+  if (el.customRoomBtn) {
+    el.customRoomBtn.addEventListener('click', () => {
+      openLobbyForGame(selectedGameId);
+    });
+  }
 
   function getInviteUrl(gameId, code) {
-    return `${window.location.origin}${window.location.pathname}?game=${gameId}&room=${code}`;
+    const c = code || 'lobby';
+    return `${window.location.origin}${window.location.pathname}?game=${gameId}&room=${c}`;
   }
 
   function copyInviteUrl() {
@@ -358,6 +490,15 @@
   });
 
   function exitToCatalog() {
+    if (connectTimeout) {
+      clearTimeout(connectTimeout);
+      connectTimeout = null;
+    }
+    if (state.peer) {
+      state.peer.destroy();
+      state.peer = null;
+    }
+    initPeer();
     if (state.activeGame && state.activeGame.unmount) {
       state.activeGame.unmount();
     }
@@ -392,11 +533,11 @@
     if (urlRouteChecked) return;
     const params = new URLSearchParams(window.location.search);
     const targetGame = params.get('game');
-    const targetRoom = params.get('room');
+    const targetRoom = params.get('room') || 'lobby';
 
-    if (targetGame && targetRoom && state.games.has(targetGame)) {
+    if (targetGame && state.games.has(targetGame)) {
       urlRouteChecked = true;
-      startJoin(targetGame, targetRoom);
+      autoJoinGame(targetGame, targetRoom);
     }
   }
 
