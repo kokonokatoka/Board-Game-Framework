@@ -238,7 +238,7 @@
       }
     },
     gobblet: {
-      category: '🎩 立体三目並べ',
+      category: '🎩 3D立体三目並べ',
       playerTypes: ['solo', 'duo'],
       genre: 'brain',
       playTime: '5分',
@@ -248,7 +248,7 @@
       featured: false,
       bannerBg: 'radial-gradient(circle at 80% 50%, rgba(239, 68, 68, 0.2), transparent 70%)',
       detailedRules: {
-        overview: '大・中・小のコマを使い、相手のコマに上から被せることができる驚きの立体進化版○×ゲーム！',
+        overview: 'Three.jsによる完全3D版！大・中・小の立体モンスターゴブラーを上からガブッと被せて乗っ取る進化系○×ゲーム！',
         rules: [
           '各プレイヤーは大・中・小各2個の持ちゴマを持っています。',
           '手番では「手持ちのコマを空きマスに置く」「手持ちのコマを小さなコマの上に被せる」「すでに盤上にある自分のコマを移動する」のいずれかを行います。',
