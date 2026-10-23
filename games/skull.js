@@ -431,59 +431,59 @@
           }
           .skull-hand-cards {
             display: flex;
-            gap: 8px;
+            gap: 10px;
             align-items: center;
-            min-height: 58px;
+            min-height: 74px;
           }
           .sk-hand-disc {
-            width: 58px;
-            height: 58px;
+            width: 72px;
+            height: 72px;
             border-radius: 50%;
             display: flex;
             flex-direction: column;
             justify-content: center;
             align-items: center;
             cursor: pointer;
-            font-weight: 800;
-            font-size: 10px;
+            font-weight: 900;
+            font-size: 12px;
             transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
-            box-shadow: 0 4px 10px rgba(0,0,0,0.45);
+            box-shadow: 0 6px 14px rgba(0,0,0,0.55);
           }
           .sk-hand-disc.flower {
-            background: radial-gradient(circle at 35% 35%, #be185d, #500724);
-            border: 2px solid #f472b6;
+            background: radial-gradient(circle at 35% 35%, #db2777, #500724);
+            border: 3px solid #f472b6;
             color: #fce7f3;
           }
           .sk-hand-disc.skull {
-            background: radial-gradient(circle at 35% 35%, #3f3f46, #09090b);
-            border: 2px solid #ef4444;
+            background: radial-gradient(circle at 35% 35%, #52525b, #09090b);
+            border: 3px solid #ef4444;
             color: #fecaca;
           }
           .sk-hand-disc:hover:not(.disabled) {
-            transform: translateY(-4px) scale(1.06);
-            box-shadow: 0 8px 16px rgba(56, 189, 248, 0.4);
+            transform: translateY(-5px) scale(1.08);
+            box-shadow: 0 10px 20px rgba(56, 189, 248, 0.5);
           }
           .sk-hand-disc.disabled {
             opacity: 0.35;
             cursor: not-allowed;
             filter: grayscale(0.5);
           }
-          .sk-disc-emoji { font-size: 20px; line-height: 1; }
+          .sk-disc-emoji { font-size: 28px; line-height: 1.1; }
 
           .skull-action-controls {
             display: flex;
             align-items: center;
-            gap: 6px;
+            gap: 8px;
             flex-wrap: wrap;
-            min-height: 58px;
+            min-height: 74px;
           }
           .bid-num-btn {
             background: linear-gradient(135deg, #f59e0b, #d97706);
             color: #fff;
             border: none;
-            border-radius: 8px;
-            padding: 8px 13px;
-            font-size: 13px;
+            border-radius: 10px;
+            padding: 10px 16px;
+            font-size: 14px;
             font-weight: 900;
             cursor: pointer;
             transition: all 0.15s;
@@ -547,39 +547,48 @@
       const actionControlsEl = container.querySelector('#skull-action-controls');
 
       // ====================================================
-      // Three.js シーン＆3Dテーブルの構築
+      // Three.js シーン＆高精細3Dテーブルの構築
       // ====================================================
       const scene = new THREE.Scene();
-      scene.fog = new THREE.FogExp2(0x050811, 0.015);
 
-      const camera = new THREE.PerspectiveCamera(42, canvasMount.clientWidth / canvasMount.clientHeight, 0.1, 1000);
-      const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+      const camera = new THREE.PerspectiveCamera(38, canvasMount.clientWidth / canvasMount.clientHeight, 0.1, 1000);
+      const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, powerPreference: 'high-performance' });
       renderer.setSize(canvasMount.clientWidth, canvasMount.clientHeight);
-      renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2.5));
       renderer.shadowMap.enabled = true;
       renderer.shadowMap.type = THREE.PCFSoftShadowMap;
       canvasMount.appendChild(renderer.domElement);
 
-      // カメラ制御用パラメータ
+      const maxAniso = renderer.capabilities.getMaxAnisotropy ? renderer.capabilities.getMaxAnisotropy() : 8;
+
+      function enhanceTex(tex) {
+        tex.anisotropy = maxAniso;
+        tex.minFilter = THREE.LinearMipmapLinearFilter;
+        tex.magFilter = THREE.LinearFilter;
+        tex.needsUpdate = true;
+        return tex;
+      }
+
+      // カメラ制御用パラメータ（テーブル全体と手札が大きく鮮明に見える距離）
       let camTheta = 0; // 水平回転角
-      let camPhi = 0.82; // 仰角 (ラジアン)
-      let camRadius = 23.5;
-      let camLookY = -0.5;
+      let camPhi = 0.68; // 仰角 (ラジアン)
+      let camRadius = 15.2;
+      let camLookY = -0.15;
 
       function applyCameraPreset(mode) {
         cameraMode = mode;
         if (mode === 'top') {
           camTheta = 0;
-          camPhi = 0.22;
-          camRadius = 25;
+          camPhi = 0.18;
+          camRadius = 16.5;
         } else if (mode === 'closeup') {
           camTheta = 0;
-          camPhi = 0.98;
-          camRadius = 17.5;
+          camPhi = 0.86;
+          camRadius = 12.2;
         } else {
           camTheta = 0;
-          camPhi = 0.78;
-          camRadius = 22.5;
+          camPhi = 0.68;
+          camRadius = 15.2;
         }
         updateCameraTransform();
       }
@@ -589,38 +598,40 @@
         const y = camRadius * Math.cos(camPhi);
         const z = camRadius * Math.sin(camPhi) * Math.cos(camTheta);
         camera.position.set(x, y, z);
-        camera.lookAt(0, camLookY, 0.8);
+        camera.lookAt(0, camLookY, 0.6);
       }
       applyCameraPreset('default');
 
       // ライティング
-      const ambientLight = new THREE.AmbientLight(0xffffff, 0.75);
+      const ambientLight = new THREE.AmbientLight(0xffffff, 0.92);
       scene.add(ambientLight);
 
-      const spotLight = new THREE.SpotLight(0xfffbeb, 1.4);
-      spotLight.position.set(0, 28, 4);
-      spotLight.angle = Math.PI / 2.4;
-      spotLight.penumbra = 0.6;
+      const spotLight = new THREE.SpotLight(0xfffbeb, 1.35);
+      spotLight.position.set(0, 24, 6);
+      spotLight.angle = Math.PI / 2.2;
+      spotLight.penumbra = 0.5;
       spotLight.castShadow = true;
+      spotLight.shadow.mapSize.width = 2048;
+      spotLight.shadow.mapSize.height = 2048;
       scene.add(spotLight);
 
-      const rimLight = new THREE.PointLight(0x38bdf8, 0.6, 35);
-      rimLight.position.set(-12, 10, -10);
+      const rimLight = new THREE.PointLight(0x38bdf8, 0.55, 35);
+      rimLight.position.set(-10, 10, -10);
       scene.add(rimLight);
 
       // カジノ円卓メッシュ
-      const TABLE_RADIUS = 10.6;
+      const TABLE_RADIUS = 8.5;
       const tableGroup = new THREE.Group();
 
       const feltGeo = new THREE.CylinderGeometry(TABLE_RADIUS, TABLE_RADIUS, 0.5, 64);
-      const feltMat = new THREE.MeshStandardMaterial({ color: 0x0d2b22, roughness: 0.85, metalness: 0.05 });
+      const feltMat = new THREE.MeshStandardMaterial({ color: 0x0f3529, roughness: 0.72, metalness: 0.08 });
       const feltMesh = new THREE.Mesh(feltGeo, feltMat);
       feltMesh.position.y = -0.25;
       feltMesh.receiveShadow = true;
       tableGroup.add(feltMesh);
 
-      const rimGeo = new THREE.TorusGeometry(TABLE_RADIUS + 0.32, 0.48, 20, 64);
-      const rimMat = new THREE.MeshStandardMaterial({ color: 0x3e1f14, roughness: 0.35, metalness: 0.2 });
+      const rimGeo = new THREE.TorusGeometry(TABLE_RADIUS + 0.28, 0.42, 24, 64);
+      const rimMat = new THREE.MeshStandardMaterial({ color: 0x452215, roughness: 0.32, metalness: 0.25 });
       const rimMesh = new THREE.Mesh(rimGeo, rimMat);
       rimMesh.rotation.x = Math.PI / 2;
       rimMesh.position.y = 0.05;
@@ -628,78 +639,129 @@
 
       scene.add(tableGroup);
 
-      // テクスチャ作成
+      // 高精細 1024x1024 テクスチャ作成
       function buildGameTextures() {
         // 1. 中央エンブレム
         const cCenter = document.createElement('canvas');
-        cCenter.width = 512; cCenter.height = 512;
+        cCenter.width = 1024; cCenter.height = 1024;
         const ctxC = cCenter.getContext('2d');
-        ctxC.strokeStyle = 'rgba(245, 158, 11, 0.35)';
-        ctxC.lineWidth = 8;
-        ctxC.beginPath(); ctxC.arc(256, 256, 230, 0, Math.PI * 2); ctxC.stroke();
-        ctxC.beginPath(); ctxC.arc(256, 256, 175, 0, Math.PI * 2); ctxC.stroke();
-        ctxC.fillStyle = 'rgba(245, 158, 11, 0.22)';
-        ctxC.font = 'bold 42px serif';
+        ctxC.strokeStyle = 'rgba(251, 191, 36, 0.42)';
+        ctxC.lineWidth = 14;
+        ctxC.beginPath(); ctxC.arc(512, 512, 460, 0, Math.PI * 2); ctxC.stroke();
+        ctxC.lineWidth = 6;
+        ctxC.beginPath(); ctxC.arc(512, 512, 360, 0, Math.PI * 2); ctxC.stroke();
+        ctxC.fillStyle = 'rgba(251, 191, 36, 0.28)';
+        ctxC.font = '900 76px "Inter", "Noto Sans JP", sans-serif';
         ctxC.textAlign = 'center';
-        ctxC.fillText('💀 SKULL & ROSES 🌸', 256, 265);
-        const texCenter = new THREE.CanvasTexture(cCenter);
+        ctxC.textBaseline = 'middle';
+        ctxC.fillText('💀 SKULL & ROSES 🌸', 512, 512);
+        const texCenter = enhanceTex(new THREE.CanvasTexture(cCenter));
 
         // 2. ディスク裏面（重厚なトライバルゴールド）
         const cBack = document.createElement('canvas');
-        cBack.width = 256; cBack.height = 256;
+        cBack.width = 1024; cBack.height = 1024;
         const ctxB = cBack.getContext('2d');
-        const gradB = ctxB.createRadialGradient(128, 128, 10, 128, 128, 124);
-        gradB.addColorStop(0, '#312e81');
-        gradB.addColorStop(1, '#0f172a');
+        const gradB = ctxB.createRadialGradient(512, 512, 40, 512, 512, 500);
+        gradB.addColorStop(0, '#4338ca');
+        gradB.addColorStop(0.65, '#1e1b4b');
+        gradB.addColorStop(1, '#090d16');
         ctxB.fillStyle = gradB;
-        ctxB.fillRect(0, 0, 256, 256);
+        ctxB.fillRect(0, 0, 1024, 1024);
+
+        ctxB.strokeStyle = 'rgba(251, 191, 36, 0.35)';
+        ctxB.lineWidth = 10;
+        for (let i = 0; i < 16; i++) {
+          const a = (i * Math.PI) / 8;
+          ctxB.beginPath();
+          ctxB.moveTo(512 + Math.cos(a) * 180, 512 + Math.sin(a) * 180);
+          ctxB.lineTo(512 + Math.cos(a) * 430, 512 + Math.sin(a) * 430);
+          ctxB.stroke();
+        }
+
+        ctxB.strokeStyle = '#fbbf24';
+        ctxB.lineWidth = 36;
+        ctxB.beginPath(); ctxB.arc(512, 512, 445, 0, Math.PI * 2); ctxB.stroke();
         ctxB.strokeStyle = '#f59e0b';
+        ctxB.lineWidth = 14;
+        ctxB.beginPath(); ctxB.arc(512, 512, 365, 0, Math.PI * 2); ctxB.stroke();
+
+        ctxB.fillStyle = 'rgba(15, 23, 42, 0.85)';
+        ctxB.beginPath(); ctxB.arc(512, 512, 220, 0, Math.PI * 2); ctxB.fill();
+        ctxB.strokeStyle = '#fde047';
         ctxB.lineWidth = 12;
-        ctxB.beginPath(); ctxB.arc(128, 128, 110, 0, Math.PI * 2); ctxB.stroke();
-        ctxB.lineWidth = 4;
-        ctxB.beginPath(); ctxB.arc(128, 128, 86, 0, Math.PI * 2); ctxB.stroke();
-        ctxB.fillStyle = '#fbbf24';
-        ctxB.font = 'bold 34px serif';
+        ctxB.stroke();
+
+        ctxB.fillStyle = '#fef08a';
+        ctxB.font = '900 118px "Inter", sans-serif';
         ctxB.textAlign = 'center';
         ctxB.textBaseline = 'middle';
-        ctxB.fillText('SKULL', 128, 128);
-        const texBack = new THREE.CanvasTexture(cBack);
+        ctxB.fillText('SKULL', 512, 485);
+        ctxB.font = '800 54px "Noto Sans JP", sans-serif';
+        ctxB.fillStyle = '#fbbf24';
+        ctxB.fillText('― 伏せディスク ―', 512, 595);
+        const texBack = enhanceTex(new THREE.CanvasTexture(cBack));
 
         // 3. ディスク表面：🌸 花 (Rose)
         const cFlower = document.createElement('canvas');
-        cFlower.width = 256; cFlower.height = 256;
+        cFlower.width = 1024; cFlower.height = 1024;
         const ctxF = cFlower.getContext('2d');
-        const gradF = ctxF.createRadialGradient(128, 128, 15, 128, 128, 124);
-        gradF.addColorStop(0, '#be185d');
+        const gradF = ctxF.createRadialGradient(512, 512, 40, 512, 512, 500);
+        gradF.addColorStop(0, '#ec4899');
+        gradF.addColorStop(0.65, '#9d174d');
         gradF.addColorStop(1, '#4c0519');
         ctxF.fillStyle = gradF;
-        ctxF.fillRect(0, 0, 256, 256);
-        ctxF.strokeStyle = '#f472b6';
+        ctxF.fillRect(0, 0, 1024, 1024);
+
+        ctxF.fillStyle = 'rgba(251, 207, 232, 0.22)';
+        for (let i = 0; i < 8; i++) {
+          const a = (i * Math.PI) / 4;
+          ctxF.beginPath();
+          ctxF.arc(512 + Math.cos(a) * 220, 512 + Math.sin(a) * 220, 130, 0, Math.PI * 2);
+          ctxF.fill();
+        }
+
+        ctxF.strokeStyle = '#f9a8d4';
+        ctxF.lineWidth = 42;
+        ctxF.beginPath(); ctxF.arc(512, 512, 445, 0, Math.PI * 2); ctxF.stroke();
+        ctxF.strokeStyle = '#fef08a';
         ctxF.lineWidth = 14;
-        ctxF.beginPath(); ctxF.arc(128, 128, 108, 0, Math.PI * 2); ctxF.stroke();
-        ctxF.font = '110px sans-serif';
+        ctxF.beginPath(); ctxF.arc(512, 512, 385, 0, Math.PI * 2); ctxF.stroke();
+
+        ctxF.font = '360px sans-serif';
         ctxF.textAlign = 'center';
         ctxF.textBaseline = 'middle';
-        ctxF.fillText('🌸', 128, 132);
-        const texFlower = new THREE.CanvasTexture(cFlower);
+        ctxF.fillText('🌸', 512, 455);
+        ctxF.fillStyle = '#ffffff';
+        ctxF.font = '900 96px "Noto Sans JP", sans-serif';
+        ctxF.fillText('花 (ROSE)', 512, 745);
+        const texFlower = enhanceTex(new THREE.CanvasTexture(cFlower));
 
         // 4. ディスク表面：💀 ドクロ (Skull)
         const cSkull = document.createElement('canvas');
-        cSkull.width = 256; cSkull.height = 256;
+        cSkull.width = 1024; cSkull.height = 1024;
         const ctxS = cSkull.getContext('2d');
-        const gradS = ctxS.createRadialGradient(128, 128, 15, 128, 128, 124);
-        gradS.addColorStop(0, '#27272a');
+        const gradS = ctxS.createRadialGradient(512, 512, 40, 512, 512, 500);
+        gradS.addColorStop(0, '#3f3f46');
+        gradS.addColorStop(0.65, '#18181b');
         gradS.addColorStop(1, '#09090b');
         ctxS.fillStyle = gradS;
-        ctxS.fillRect(0, 0, 256, 256);
+        ctxS.fillRect(0, 0, 1024, 1024);
+
         ctxS.strokeStyle = '#ef4444';
-        ctxS.lineWidth = 16;
-        ctxS.beginPath(); ctxS.arc(128, 128, 108, 0, Math.PI * 2); ctxS.stroke();
-        ctxS.font = '110px sans-serif';
+        ctxS.lineWidth = 46;
+        ctxS.beginPath(); ctxS.arc(512, 512, 445, 0, Math.PI * 2); ctxS.stroke();
+        ctxS.strokeStyle = '#fca5a5';
+        ctxS.lineWidth = 14;
+        ctxS.beginPath(); ctxS.arc(512, 512, 380, 0, Math.PI * 2); ctxS.stroke();
+
+        ctxS.font = '360px sans-serif';
         ctxS.textAlign = 'center';
         ctxS.textBaseline = 'middle';
-        ctxS.fillText('💀', 128, 132);
-        const texSkull = new THREE.CanvasTexture(cSkull);
+        ctxS.fillText('💀', 512, 455);
+        ctxS.fillStyle = '#f87171';
+        ctxS.font = '900 96px "Noto Sans JP", sans-serif';
+        ctxS.fillText('SKULL', 512, 745);
+        const texSkull = enhanceTex(new THREE.CanvasTexture(cSkull));
 
         return { texCenter, texBack, texFlower, texSkull };
       }
@@ -707,7 +769,7 @@
       const { texCenter, texBack, texFlower, texSkull } = buildGameTextures();
 
       const centerDecal = new THREE.Mesh(
-        new THREE.PlaneGeometry(6.8, 6.8),
+        new THREE.PlaneGeometry(4.6, 4.6),
         new THREE.MeshBasicMaterial({ map: texCenter, transparent: true })
       );
       centerDecal.rotation.x = -Math.PI / 2;
@@ -813,15 +875,18 @@
         }
       }
 
-      // 3D座席マットと3Dディスクの再構築
+      // 3D座席マット・立体ビルボード名札・大型3Dディスクの再構築
       function rebuild3DTableState() {
         clear3DObjects();
 
-        const SEAT_DIST = 7.4;
-        const STACK_DIST = 4.3;
+        const SEAT_DIST = 6.15;
+        const STACK_DIST = 3.55;
+        const activeCount = Math.max(2, activePlayerCount);
 
         players.forEach((p, idx) => {
-          const angle = Math.PI / 2 + (idx * (2 * Math.PI / MAX_SEATS));
+          if (!p.isActive) return; // 参加人数分だけを円卓に均等配置（無駄な空席をなくして大きく見せる）
+
+          const angle = Math.PI / 2 + (idx * (2 * Math.PI / activeCount));
           const sx = Math.cos(angle) * SEAT_DIST;
           const sz = Math.sin(angle) * SEAT_DIST;
           const matX = Math.cos(angle) * STACK_DIST;
@@ -832,63 +897,112 @@
 
           const seatGroup = new THREE.Group();
 
-          // 1. プレイヤーの3Dコースターマット (場のスタック置き場)
+          // 1. プレイヤーの3Dコースターマット (1024x1024 高解像度)
           const matCanvas = document.createElement('canvas');
-          matCanvas.width = 256; matCanvas.height = 256;
+          matCanvas.width = 1024; matCanvas.height = 1024;
           const ctxM = matCanvas.getContext('2d');
 
           const isAct = p.isActive && !p.isEliminated;
           const isTurn = (phase !== 'FIRST_CARD' && currentTurn === idx && isAct);
 
           // 1勝リーチ時はマットが黄金に輝く！
-          ctxM.fillStyle = p.wins >= 1 ? 'rgba(234, 179, 8, 0.35)' : (isAct ? 'rgba(15, 23, 42, 0.85)' : 'rgba(15, 23, 42, 0.25)');
-          ctxM.beginPath(); ctxM.arc(128, 128, 116, 0, Math.PI * 2); ctxM.fill();
+          ctxM.fillStyle = p.wins >= 1 ? 'rgba(234, 179, 8, 0.42)' : (isAct ? 'rgba(15, 23, 42, 0.92)' : 'rgba(15, 23, 42, 0.35)');
+          ctxM.beginPath(); ctxM.arc(512, 512, 470, 0, Math.PI * 2); ctxM.fill();
 
-          ctxM.strokeStyle = isTurn ? '#fbbf24' : (isAct ? p.theme.css : '#334155');
-          ctxM.lineWidth = isTurn ? 12 : 6;
-          if (!isAct) ctxM.setLineDash([12, 10]);
+          ctxM.strokeStyle = isTurn ? '#fde047' : (isAct ? p.theme.css : '#334155');
+          ctxM.lineWidth = isTurn ? 42 : 24;
           ctxM.stroke();
 
-          ctxM.fillStyle = isAct ? '#ffffff' : '#64748b';
-          ctxM.font = 'bold 26px sans-serif';
+          ctxM.strokeStyle = 'rgba(255, 255, 255, 0.22)';
+          ctxM.lineWidth = 8;
+          ctxM.beginPath(); ctxM.arc(512, 512, 390, 0, Math.PI * 2); ctxM.stroke();
+
+          ctxM.fillStyle = isAct ? '#f8fafc' : '#64748b';
+          ctxM.font = '900 84px "Noto Sans JP", sans-serif';
           ctxM.textAlign = 'center';
-          ctxM.fillText(isAct ? p.name : `空席 ${idx + 1}`, 128, 70);
+          ctxM.fillText(p.name, 512, 260);
 
           if (isAct) {
-            ctxM.fillStyle = '#fbbf24';
-            ctxM.font = 'bold 28px sans-serif';
-            ctxM.fillText(p.wins === 1 ? '★ リーチ!' : (p.wins >= 2 ? '★★ 勝利!' : '☆☆'), 128, 195);
+            ctxM.fillStyle = '#fde047';
+            ctxM.font = '900 92px "Noto Sans JP", sans-serif';
+            ctxM.fillText(p.wins === 1 ? '★ リーチ!' : (p.wins >= 2 ? '★★ 勝利!' : '☆☆ 0勝'), 512, 790);
           }
 
-          const texMat = new THREE.CanvasTexture(matCanvas);
+          const texMat = enhanceTex(new THREE.CanvasTexture(matCanvas));
+          const coasterSideMat = new THREE.MeshStandardMaterial({ color: isTurn ? 0xfacc15 : p.theme.hex, roughness: 0.3, metalness: 0.3 });
+          const coasterTopMat = new THREE.MeshBasicMaterial({ map: texMat, transparent: true, opacity: isAct ? 1 : 0.4 });
           const coasterMesh = new THREE.Mesh(
-            new THREE.CylinderGeometry(1.35, 1.35, 0.05, 32),
-            new THREE.MeshBasicMaterial({ map: texMat, transparent: true, opacity: isAct ? 1 : 0.35 })
+            new THREE.CylinderGeometry(1.72, 1.78, 0.10, 48),
+            [coasterSideMat, coasterTopMat, coasterSideMat]
           );
-          coasterMesh.position.set(matX, 0.03, matZ);
+          coasterMesh.position.set(matX, 0.05, matZ);
           coasterMesh.userData = { isCoaster: true, seatIndex: idx };
           seatGroup.add(coasterMesh);
           p.coasterMesh = coasterMesh;
 
-          // 2. マットの上に積まれているスタックの3Dディスクを生成
+          // 1b. カメラに常時正対する高精細3Dビルボード名札 (THREE.Sprite)
+          const labelCanvas = document.createElement('canvas');
+          labelCanvas.width = 640;
+          labelCanvas.height = 200;
+          const ctxL = labelCanvas.getContext('2d');
+
+          ctxL.fillStyle = isTurn ? 'rgba(30, 41, 59, 0.95)' : 'rgba(15, 23, 42, 0.88)';
+          ctxL.strokeStyle = isTurn ? '#fde047' : p.theme.css;
+          ctxL.lineWidth = isTurn ? 10 : 6;
+          ctxL.beginPath();
+          if (ctxL.roundRect) {
+            ctxL.roundRect(10, 10, 620, 180, 32);
+          } else {
+            ctxL.rect(10, 10, 620, 180);
+          }
+          ctxL.fill();
+          ctxL.stroke();
+
+          ctxL.textAlign = 'center';
+          ctxL.textBaseline = 'middle';
+          ctxL.fillStyle = isTurn ? '#fde047' : p.theme.css;
+          ctxL.font = '900 54px "Noto Sans JP", sans-serif';
+          const starBadge = p.wins >= 2 ? '★★' : (p.wins === 1 ? '★リーチ' : '');
+          ctxL.fillText(`${isTurn ? '🎯 ' : ''}${p.name} ${starBadge}`, 320, 68);
+
+          ctxL.fillStyle = '#f8fafc';
+          ctxL.font = '800 44px "Noto Sans JP", sans-serif';
+          const subStatus = p.isEliminated
+            ? '💀 脱落'
+            : (p.passed ? `⏭️ パス (場:${p.stack.length}枚)` : `場: ${p.stack.length}枚 ｜ 手札: ${p.hand.length}枚`);
+          ctxL.fillText(subStatus, 320, 138);
+
+          const texLabel = enhanceTex(new THREE.CanvasTexture(labelCanvas));
+          const spriteMat = new THREE.SpriteMaterial({ map: texLabel, transparent: true, depthTest: false });
+          const labelSprite = new THREE.Sprite(spriteMat);
+          labelSprite.scale.set(3.2, 1.0, 1);
+          const labelDist = STACK_DIST + 1.45;
+          labelSprite.position.set(
+            Math.cos(angle) * labelDist,
+            1.28,
+            Math.sin(angle) * labelDist
+          );
+          seatGroup.add(labelSprite);
+
+          // 2. マットの上に積まれているスタックの大型3Dディスクを生成
           p.stack.forEach((cardObj, sIdx) => {
             const discMesh = create3DDisc(
               idx,
               cardObj.type,
               cardObj.revealed,
-              matX + (sIdx * 0.08),
-              0.12 + sIdx * 0.12,
-              matZ + (sIdx * 0.08),
+              matX + (sIdx * 0.14),
+              0.18 + sIdx * 0.18,
+              matZ + (sIdx * 0.14),
               { isStackDisc: true, seatIndex: idx, stackIndex: sIdx }
             );
             cardObj.mesh = discMesh;
           });
 
-          // 3. 手札の3Dディスク (外周座席エリアに並べる)
+          // 3. 手札の大型3Dディスク (外周座席エリアに並べる)
           if (isAct) {
             const handCount = p.hand.length;
             p.hand.forEach((cardType, hIdx) => {
-              const offset = (hIdx - (handCount - 1) / 2) * 1.15;
+              const offset = (hIdx - (handCount - 1) / 2) * 1.48;
               const tangentX = -Math.sin(angle) * offset;
               const tangentZ = Math.cos(angle) * offset;
               // 自分の手札だけ表面が見え、CPUの手札は裏面
@@ -898,7 +1012,7 @@
                 cardType,
                 showFace,
                 sx + tangentX,
-                0.08,
+                0.12,
                 sz + tangentZ,
                 { isHandDisc: true, seatIndex: idx, handIndex: hIdx, cardType }
               );
@@ -911,11 +1025,11 @@
       }
 
       function create3DDisc(seatIdx, type, isFaceUp, x, y, z, meta) {
-        const geo = new THREE.CylinderGeometry(0.75, 0.75, 0.09, 32);
+        const geo = new THREE.CylinderGeometry(1.06, 1.06, 0.15, 48);
         const sideColor = SEAT_THEMES[seatIdx] ? SEAT_THEMES[seatIdx].hex : 0xd97706;
-        const matSide = new THREE.MeshStandardMaterial({ color: sideColor, metalness: 0.4, roughness: 0.3 });
-        const matTop = new THREE.MeshStandardMaterial({ map: type === DISC_FLOWER ? texFlower : texSkull, roughness: 0.3 });
-        const matBottom = new THREE.MeshStandardMaterial({ map: texBack, roughness: 0.3 });
+        const matSide = new THREE.MeshStandardMaterial({ color: sideColor, metalness: 0.35, roughness: 0.25 });
+        const matTop = new THREE.MeshStandardMaterial({ map: type === DISC_FLOWER ? texFlower : texSkull, roughness: 0.22, metalness: 0.05 });
+        const matBottom = new THREE.MeshStandardMaterial({ map: texBack, roughness: 0.22, metalness: 0.05 });
 
         const mesh = new THREE.Mesh(geo, [matSide, matTop, matBottom]);
         mesh.castShadow = true;
@@ -1370,23 +1484,36 @@
           }
         }
 
-        // ディスク以外の場所をドラッグしたらカメラを水平回転できる
+        // ディスク以外の場所をドラッグしたらカメラを自由回転・チルトできる
         isOrbitDragging = true;
         prevPointerX = clientX;
+        prevPointerY = clientY;
       }
+
+      let prevPointerY = 0;
 
       function onCanvasPointerMove(e) {
         if (!isOrbitDragging) return;
         const clientX = e.clientX ?? (e.touches && e.touches[0].clientX);
+        const clientY = e.clientY ?? (e.touches && e.touches[0].clientY);
         const dx = clientX - prevPointerX;
+        const dy = clientY - prevPointerY;
         prevPointerX = clientX;
+        prevPointerY = clientY;
         camTheta -= dx * 0.007;
+        camPhi = Math.max(0.18, Math.min(1.15, camPhi - dy * 0.005));
         updateCameraTransform();
       }
 
       function onCanvasPointerUp() {
         isOrbitDragging = false;
       }
+
+      canvasMount.addEventListener('wheel', (e) => {
+        e.preventDefault();
+        camRadius = Math.max(9.5, Math.min(22.0, camRadius + e.deltaY * 0.006));
+        updateCameraTransform();
+      }, { passive: false });
 
       canvasMount.addEventListener('mousedown', onCanvasPointerDown);
       window.addEventListener('mousemove', onCanvasPointerMove);
