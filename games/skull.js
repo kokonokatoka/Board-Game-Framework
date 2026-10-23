@@ -1,19 +1,20 @@
 /**
- * 💀 3D スカル (Skull / 髑髏と薔薇) - 卓上シームレスシミュレーター
+ * 💀 3D スカル (Skull / 髑髏と薔薇) - 新生・本格卓上シミュレーター
  * Board Arena Plugin
  * 
- * 仕様:
- * - ボタン操作・手番制御の制約を全撤廃！完全にリアルなボードゲーム卓上を再現！
- * - 回転をやめて正面固定のカジノテーブル（最大8席）
- * - 自陣（手前）に4枚のディスク（花3枚、ドクロ1枚）が並ぶ
- * - 【ドラッグ＆ドロップ】マウスでディスクを掴んでテーブル中央へシームレスに配置！
- * - 【相手からは見えない】手元のディスクは自分にだけ絵柄が見え、相手の画面からは裏面に見える！
- * - 【ダブルクリックで反転】ディスクをダブルクリックすると、くるっとめくれて表面が全員に公開！
- * - リアルタイムP2P同期（ディスクの移動・めくりが全員の画面に即時反映）
+ * 🌟 新仕様:
+ * 1. 【広々とした専用カジノ卓】画面を大幅拡張 (高さ620px、最大幅1100px)。
+ * 2. 【カードの枚数を4枚固定】余計なダミーカード全廃！自分4枚・相手4枚の計8枚のみ。
+ * 3. 【明確に区切られた3大ゾーン】:
+ *    - 🟦 あなたの手札エリア (手前4スロット、絶対に重ならない整列スロット)
+ *    - ⚔️ カードを出すエリア (テーブル中央のプレイエリア)
+ *    - 💀 没収エリア (失ったカードを置く右側のペナルティゾーン)
+ * 4. 【スマート吸着スナップ】ドロップ時にスロットへ吸着し、カード同士の重なりを完全防止！
+ * 5. 【シームレス操作】ドラッグ＆ドロップ移動 ＋ ダブルクリックで表裏反転（めくり）！
+ * 6. 【リアルタイムP2P同期】移動・めくり・整列が相手画面と即時連動。
  */
 
 (function () {
-  const MAX_SEATS = 8;
   const DISC_FLOWER = 'flower';
   const DISC_SKULL = 'skull';
 
@@ -23,38 +24,51 @@
     icon: '💀',
     category: '3D・カジノ・ブラフ',
     minPlayers: 2,
-    maxPlayers: 8,
-    description: 'ボタン操作撤廃！手札を掴んでドラッグ＆ドロップで場に出し、ダブルクリックでめくる本格卓上3Dスカル！',
+    maxPlayers: 2,
+    description: '広々としたカジノ卓で至高の心理戦！手札エリア・出すエリア・没収エリアを完全完備。ドラッグ＆ドロップとダブルクリックでめくる本格卓上3Dスカル！',
 
     mount(container, bridge) {
       let isDestroyed = false;
       let animFrameId = null;
 
-      // HTML UI (超シンプル＆直感的)
+      // HTML UI 構築
       container.innerHTML = `
         <div class="skull-wrapper">
-          <!-- 上部インフォバー -->
+          <!-- 上部コントロールバー -->
           <div class="skull-status-bar">
-            <div class="skull-guide-badge">
-              🖐️ <strong>操作方法:</strong> ディスクをドラッグして移動 / <strong>ダブルクリック</strong>で裏返す
+            <div class="skull-zones-legend">
+              <span class="zone-tag tag-hand">🟦 手札エリア (4枚)</span>
+              <span class="zone-tag tag-play">⚔️ 出すエリア (中央)</span>
+              <span class="zone-tag tag-forfeit">💀 没収エリア (右側)</span>
             </div>
-            <div class="skull-top-actions">
-              <button id="btn-collect-discs" class="btn btn-sm btn-subtle" title="全員のディスクを手元に回収・整列します">🔄 手元に配り直す</button>
+            <div class="skull-actions">
+              <button id="btn-reset-hand" class="btn btn-sm btn-subtle" title="手札スロットに4枚をきれいに整列します">🔄 手元に整列</button>
+              <button id="btn-flip-all-down" class="btn btn-sm btn-subtle" title="自分のカードをすべて裏返して伏せます">🎴 全て伏せる</button>
             </div>
           </div>
 
-          <!-- 3D Canvas レンダリング領域 -->
+          <!-- 3D Canvas コンテナ -->
           <div class="skull-canvas-container" id="skull-3d-container">
-            <div class="table-center-logo">💀 SKULL TABLE</div>
+            <!-- ゾーン案内ラベル (オーバーレイ) -->
+            <div class="zone-label-hint label-opponent">⬆️ 相手の手札エリア</div>
+            <div class="zone-label-hint label-center">⚔️ カードを出すエリア (プレイゾーン)</div>
+            <div class="zone-label-hint label-forfeit">💀 没収エリア (ペナルティ)</div>
+            <div class="zone-label-hint label-player">⬇️ あなたの手札エリア (重ならず4枚配置)</div>
+
             <div id="drag-hint" class="drag-hint hidden">掴み中</div>
+          </div>
+
+          <!-- 下部ガイドメッセージ -->
+          <div class="skull-guide-footer">
+            <span>🖐️ <strong>操作方法:</strong> カードをドラッグして場や没収エリアへ移動 / <strong>ダブルクリック</strong>で表裏をひっくり返す</span>
           </div>
         </div>
       `;
 
       // スタイル定義
-      if (!document.getElementById('skull-custom-css')) {
+      if (!document.getElementById('skull-custom-css-v2')) {
         const style = document.createElement('style');
-        style.id = 'skull-custom-css';
+        style.id = 'skull-custom-css-v2';
         style.textContent = `
           .skull-wrapper {
             display: flex;
@@ -62,7 +76,7 @@
             align-items: center;
             gap: 10px;
             width: 100%;
-            max-width: 900px;
+            max-width: 1050px;
             margin: 0 auto;
             user-select: none;
             color: #f1f5f9;
@@ -73,30 +87,45 @@
             justify-content: space-between;
             align-items: center;
             width: 100%;
-            background: #18202c;
+            background: #111827;
             padding: 8px 16px;
-            border-radius: 8px;
-            border: 1px solid #2b384a;
+            border-radius: 10px;
+            border: 1px solid #283548;
             font-size: 13px;
           }
 
-          .skull-guide-badge {
-            color: #facc15;
+          .skull-zones-legend {
             display: flex;
+            gap: 10px;
             align-items: center;
-            gap: 6px;
+            flex-wrap: wrap;
           }
 
-          /* 3D Canvas コンテナ */
+          .zone-tag {
+            font-size: 11px;
+            font-weight: 700;
+            padding: 3px 8px;
+            border-radius: 6px;
+          }
+          .tag-hand { background: #1e3a8a50; color: #60a5fa; border: 1px solid #3b82f660; }
+          .tag-play { background: #f59e0b25; color: #fbbf24; border: 1px solid #f59e0b60; }
+          .tag-forfeit { background: #ef444425; color: #f87171; border: 1px solid #ef444460; }
+
+          .skull-actions {
+            display: flex;
+            gap: 8px;
+          }
+
+          /* 3D Canvas コンテナ (広々設計) */
           .skull-canvas-container {
             width: 100%;
-            height: 520px;
-            background: radial-gradient(circle at center, #111827, #030712);
-            border-radius: 14px;
-            border: 2px solid #374151;
+            height: 580px;
+            background: radial-gradient(circle at center, #0d1522, #020617);
+            border-radius: 16px;
+            border: 2px solid #334155;
             position: relative;
             overflow: hidden;
-            box-shadow: 0 15px 35px rgba(0, 0, 0, 0.7);
+            box-shadow: 0 20px 45px rgba(0, 0, 0, 0.75);
             cursor: grab;
           }
           .skull-canvas-container.grabbing {
@@ -110,65 +139,78 @@
             outline: none;
           }
 
-          .table-center-logo {
+          /* ゾーンラベル表示 */
+          .zone-label-hint {
             position: absolute;
-            top: 14px;
-            left: 50%;
-            transform: translateX(-50%);
-            background: rgba(0, 0, 0, 0.65);
-            backdrop-filter: blur(6px);
-            padding: 4px 16px;
-            border-radius: 20px;
-            font-size: 13px;
-            font-weight: 800;
-            letter-spacing: 1.5px;
-            color: #fef08a;
-            border: 1px solid rgba(254, 240, 138, 0.25);
+            background: rgba(15, 23, 42, 0.75);
+            backdrop-filter: blur(4px);
+            padding: 3px 10px;
+            border-radius: 12px;
+            font-size: 11px;
+            font-weight: 700;
             pointer-events: none;
-            z-index: 10;
+            z-index: 5;
+            border: 1px solid rgba(255, 255, 255, 0.1);
           }
+          .label-opponent { top: 12px; left: 50%; transform: translateX(-50%); color: #94a3b8; }
+          .label-center { top: 40%; left: 45%; transform: translate(-50%, -50%); color: #fbbf24; }
+          .label-forfeit { top: 40%; right: 20px; transform: translateY(-50%); color: #f87171; border-color: rgba(239, 68, 68, 0.4); }
+          .label-player { bottom: 12px; left: 45%; transform: translateX(-50%); color: #38bdf8; border-color: rgba(56, 189, 248, 0.4); }
 
           .drag-hint {
             position: absolute;
-            bottom: 12px;
+            bottom: 45px;
             left: 50%;
             transform: translateX(-50%);
-            background: rgba(0, 0, 0, 0.75);
+            background: rgba(0, 0, 0, 0.85);
             color: #38bdf8;
             font-size: 12px;
-            padding: 4px 12px;
-            border-radius: 12px;
+            font-weight: 700;
+            padding: 5px 14px;
+            border-radius: 14px;
             pointer-events: none;
+            z-index: 10;
+            border: 1px solid #38bdf850;
           }
           .drag-hint.hidden { display: none; }
 
+          .skull-guide-footer {
+            width: 100%;
+            text-align: center;
+            font-size: 12px;
+            color: #94a3b8;
+            background: #0f172a;
+            padding: 6px 12px;
+            border-radius: 8px;
+            border: 1px solid #1e293b;
+          }
+
           @media (max-width: 640px) {
-            .skull-canvas-container { height: 420px; }
+            .skull-canvas-container { height: 460px; }
             .skull-status-bar { flex-direction: column; gap: 8px; align-items: flex-start; }
+            .skull-zones-legend { gap: 6px; }
           }
         `;
         document.head.appendChild(style);
       }
 
       const canvasContainer = container.querySelector('#skull-3d-container');
-      const btnCollectDiscs = container.querySelector('#btn-collect-discs');
+      const btnResetHand = container.querySelector('#btn-reset-hand');
+      const btnFlipAllDown = container.querySelector('#btn-flip-all-down');
       const dragHint = container.querySelector('#drag-hint');
 
       // ----------------------------------------------------
-      // 1. Three.js シーン初期化 (回転なし・固定カメラ)
+      // 1. Three.js シーン・カメラ・ライトの初期化
       // ----------------------------------------------------
       const scene = new THREE.Scene();
-      scene.fog = new THREE.FogExp2(0x050811, 0.02);
+      scene.fog = new THREE.FogExp2(0x060913, 0.015);
 
-      const camera = new THREE.PerspectiveCamera(
-        45,
-        canvasContainer.clientWidth / canvasContainer.clientHeight,
-        0.1,
-        1000
-      );
-      // 手前の自陣とテーブル全体が一番見やすい固定角度
-      camera.position.set(0, 18, 16);
-      camera.lookAt(0, -1, -0.5);
+      const aspect = canvasContainer.clientWidth / canvasContainer.clientHeight;
+      const camera = new THREE.PerspectiveCamera(40, aspect, 0.1, 1000);
+      
+      // 手前から全体を見下ろす広々としたカメラポジション
+      camera.position.set(0, 21, 14.5);
+      camera.lookAt(0, -0.2, 0.2);
 
       const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
       renderer.setSize(canvasContainer.clientWidth, canvasContainer.clientHeight);
@@ -177,80 +219,192 @@
       renderer.shadowMap.type = THREE.PCFSoftShadowMap;
       canvasContainer.appendChild(renderer.domElement);
 
-      // ライト
-      const ambientLight = new THREE.AmbientLight(0xffffff, 0.55);
+      // 環境光 & スポットライト
+      const ambientLight = new THREE.AmbientLight(0xffffff, 0.65);
       scene.add(ambientLight);
 
-      const spotLight = new THREE.SpotLight(0xfff5ea, 1.3);
-      spotLight.position.set(0, 22, 0);
-      spotLight.angle = Math.PI / 3;
-      spotLight.penumbra = 0.4;
+      const spotLight = new THREE.SpotLight(0xfff7ed, 1.4);
+      spotLight.position.set(0, 25, 2);
+      spotLight.angle = Math.PI / 2.8;
+      spotLight.penumbra = 0.45;
       spotLight.castShadow = true;
       scene.add(spotLight);
 
-      const warmLight = new THREE.PointLight(0xf59e0b, 0.7, 30);
-      warmLight.position.set(0, 8, 4);
-      scene.add(warmLight);
+      const blueRim = new THREE.PointLight(0x38bdf8, 0.8, 35);
+      blueRim.position.set(-8, 6, 8);
+      scene.add(blueRim);
 
-      // カジノテーブル (固定・回転しない)
+      const redRim = new THREE.PointLight(0xef4444, 0.8, 35);
+      redRim.position.set(8, 6, 0);
+      scene.add(redRim);
+
+      // ----------------------------------------------------
+      // 2. ワイド・カジノテーブル & 各ゾーンの描画
+      // ----------------------------------------------------
       const tableGroup = new THREE.Group();
 
-      // 天板グリーンフェルト
-      const feltGeo = new THREE.CylinderGeometry(8.2, 8.2, 0.4, 64);
-      const feltMat = new THREE.MeshStandardMaterial({
-        color: 0x14532d,
-        roughness: 0.85,
+      // テーブル天板 (広々としたオーバル/丸角長方形)
+      const TABLE_WIDTH = 19.5;
+      const TABLE_DEPTH = 13.5;
+      const tableGeo = new THREE.BoxGeometry(TABLE_WIDTH, 0.4, TABLE_DEPTH);
+      const tableMat = new THREE.MeshStandardMaterial({
+        color: 0x0f291e, // ダークグリーン・フェルト
+        roughness: 0.8,
         metalness: 0.05
       });
-      const feltMesh = new THREE.Mesh(feltGeo, feltMat);
-      feltMesh.receiveShadow = true;
-      feltMesh.position.y = -0.2;
-      tableGroup.add(feltMesh);
+      const tableMesh = new THREE.Mesh(tableGeo, tableMat);
+      tableMesh.position.y = -0.2;
+      tableMesh.receiveShadow = true;
+      tableGroup.add(tableMesh);
 
-      // マホガニーレール
-      const railGeo = new THREE.TorusGeometry(8.4, 0.45, 16, 64);
+      // マホガニー外枠レール
+      const railGeo = new THREE.BoxGeometry(TABLE_WIDTH + 0.8, 0.45, TABLE_DEPTH + 0.8);
       const railMat = new THREE.MeshStandardMaterial({
-        color: 0x451a03,
+        color: 0x3b1d11, // 高級マホガニーウッド
         roughness: 0.35,
-        metalness: 0.15
+        metalness: 0.2
       });
       const railMesh = new THREE.Mesh(railGeo, railMat);
-      railMesh.rotation.x = Math.PI / 2;
-      railMesh.position.y = 0.05;
+      railMesh.position.y = -0.25;
       railMesh.receiveShadow = true;
       tableGroup.add(railMesh);
 
       scene.add(tableGroup);
 
-      // 8席のコースター（マット）を配置
-      const seatPositions = [];
-      const TABLE_RADIUS = 5.2;
+      // ----------------------------------------------------
+      // 3. ゾーン用テクスチャの生成 (手札枠・プレイ枠・没収枠)
+      // ----------------------------------------------------
+      function createZoneTextures() {
+        // ① 手札スロット枠 (青ネオン)
+        const cSlot = document.createElement('canvas');
+        cSlot.width = 256; cSlot.height = 256;
+        const ctxS = cSlot.getContext('2d');
+        ctxS.strokeStyle = '#38bdf8';
+        ctxS.lineWidth = 10;
+        ctxS.setLineDash([16, 10]);
+        ctxS.beginPath();
+        ctxS.arc(128, 128, 110, 0, Math.PI * 2);
+        ctxS.stroke();
+        ctxS.fillStyle = 'rgba(56, 189, 248, 0.15)';
+        ctxS.fill();
+        const texSlot = new THREE.CanvasTexture(cSlot);
 
-      for (let i = 0; i < MAX_SEATS; i++) {
-        // Seat 0 を手前（自分）、時計回りに配置
-        const angle = -Math.PI / 2 + (i * (2 * Math.PI / MAX_SEATS));
-        const cx = Math.cos(angle) * TABLE_RADIUS;
-        const cz = Math.sin(angle) * TABLE_RADIUS;
+        // ② プレイエリア枠 (中央・ゴールドサークル)
+        const cPlay = document.createElement('canvas');
+        cPlay.width = 512; cPlay.height = 512;
+        const ctxP = cPlay.getContext('2d');
+        ctxP.strokeStyle = '#f59e0b';
+        ctxP.lineWidth = 10;
+        ctxP.beginPath();
+        ctxP.arc(256, 256, 235, 0, Math.PI * 2);
+        ctxP.stroke();
+        ctxP.fillStyle = 'rgba(245, 158, 11, 0.08)';
+        ctxP.fill();
+        ctxP.fillStyle = '#f59e0b';
+        ctxP.font = 'bold 32px sans-serif';
+        ctxP.textAlign = 'center';
+        ctxP.fillText('⚔️ PLAY AREA', 256, 256);
+        ctxP.font = '22px sans-serif';
+        ctxP.fillText('(カードを出すエリア)', 256, 295);
+        const texPlay = new THREE.CanvasTexture(cPlay);
 
-        // コースター（マット）
-        const coasterGeo = new THREE.CylinderGeometry(1.25, 1.25, 0.04, 32);
-        const coasterMat = new THREE.MeshStandardMaterial({
-          color: i === 0 ? 0x1e3a8a : 0x1e293b,
-          roughness: 0.7,
-          metalness: 0.1
-        });
-        const coasterMesh = new THREE.Mesh(coasterGeo, coasterMat);
-        coasterMesh.position.set(cx, 0.02, cz);
-        coasterMesh.receiveShadow = true;
-        scene.add(coasterMesh);
+        // ③ 没収エリア枠 (赤・ペナルティ)
+        const cForfeit = document.createElement('canvas');
+        cForfeit.width = 384; cForfeit.height = 512;
+        const ctxF = cForfeit.getContext('2d');
+        ctxF.fillStyle = 'rgba(239, 68, 68, 0.12)';
+        ctxF.fillRect(10, 10, 364, 492);
+        ctxF.strokeStyle = '#ef4444';
+        ctxF.lineWidth = 8;
+        ctxF.strokeRect(10, 10, 364, 492);
+        ctxF.fillStyle = '#ef4444';
+        ctxF.font = 'bold 36px sans-serif';
+        ctxF.textAlign = 'center';
+        ctxF.fillText('💀 没収エリア', 192, 60);
+        ctxF.font = '20px sans-serif';
+        ctxF.fillText('(ペナルティ)', 192, 95);
+        // ドクロ枠スロット点線
+        for (let i = 0; i < 3; i++) {
+          ctxF.setLineDash([8, 8]);
+          ctxF.strokeStyle = '#f87171';
+          ctxF.lineWidth = 4;
+          ctxF.beginPath();
+          ctxF.arc(192, 175 + i * 115, 48, 0, Math.PI * 2);
+          ctxF.stroke();
+          ctxF.fillText('💀', 192, 185 + i * 115);
+        }
+        const texForfeit = new THREE.CanvasTexture(cForfeit);
 
-        seatPositions.push({ x: cx, z: cz, angle: angle });
+        return { texSlot, texPlay, texForfeit };
       }
 
+      const { texSlot, texPlay, texForfeit } = createZoneTextures();
+
+      // テーブル表面にゾーンを描画
+      // 1. プレイエリア (中央)
+      const playAreaGeo = new THREE.PlaneGeometry(7.2, 7.2);
+      const playAreaMat = new THREE.MeshBasicMaterial({ map: texPlay, transparent: true });
+      const playAreaMesh = new THREE.Mesh(playAreaGeo, playAreaMat);
+      playAreaMesh.rotation.x = -Math.PI / 2;
+      playAreaMesh.position.set(-1.0, 0.02, 0);
+      scene.add(playAreaMesh);
+
+      // 2. 没収エリア (右側)
+      const forfeitGeo = new THREE.PlaneGeometry(3.6, 5.0);
+      const forfeitMat = new THREE.MeshBasicMaterial({ map: texForfeit, transparent: true });
+      const forfeitMesh = new THREE.Mesh(forfeitGeo, forfeitMat);
+      forfeitMesh.rotation.x = -Math.PI / 2;
+      forfeitMesh.position.set(6.8, 0.02, 0);
+      scene.add(forfeitMesh);
+
+      // 3. 手札スロット定義 (4枚固定・重ならない)
+      // 自分 (手前)
+      const myHandSlots = [];
+      const SLOT_START_X = -4.6;
+      const SLOT_STEP_X = 2.4;
+      const MY_HAND_Z = 4.6;
+
+      for (let i = 0; i < 4; i++) {
+        const slotX = SLOT_START_X + (i * SLOT_STEP_X);
+        const slotMesh = new THREE.Mesh(
+          new THREE.PlaneGeometry(2.0, 2.0),
+          new THREE.MeshBasicMaterial({ map: texSlot, transparent: true })
+        );
+        slotMesh.rotation.x = -Math.PI / 2;
+        slotMesh.position.set(slotX, 0.02, MY_HAND_Z);
+        scene.add(slotMesh);
+
+        myHandSlots.push({ x: slotX, z: MY_HAND_Z, slotIndex: i });
+      }
+
+      // 相手 (奥) の手札スロット
+      const opHandSlots = [];
+      const OP_HAND_Z = -4.6;
+
+      for (let i = 0; i < 4; i++) {
+        const slotX = SLOT_START_X + (i * SLOT_STEP_X);
+        const slotMesh = new THREE.Mesh(
+          new THREE.PlaneGeometry(2.0, 2.0),
+          new THREE.MeshBasicMaterial({ map: texSlot, transparent: true, opacity: 0.6 })
+        );
+        slotMesh.rotation.x = -Math.PI / 2;
+        slotMesh.position.set(slotX, 0.02, OP_HAND_Z);
+        scene.add(slotMesh);
+
+        opHandSlots.push({ x: slotX, z: OP_HAND_Z, slotIndex: i });
+      }
+
+      // 没収エリアのスロット (右側3枠)
+      const forfeitSlots = [
+        { x: 6.8, z: -1.4 },
+        { x: 6.8, z: 0.0 },
+        { x: 6.8, z: 1.4 }
+      ];
+
       // ----------------------------------------------------
-      // 2. ディスクテクスチャの作成
+      // 4. ディスクテクスチャの生成
       // ----------------------------------------------------
-      function createTextures() {
+      function createCardTextures() {
         // 裏面（SKULL柄ゴールド）
         const cBack = document.createElement('canvas');
         cBack.width = 256; cBack.height = 256;
@@ -258,13 +412,13 @@
         ctxB.fillStyle = '#1e1b4b';
         ctxB.fillRect(0, 0, 256, 256);
         ctxB.strokeStyle = '#f59e0b';
-        ctxB.lineWidth = 10;
-        ctxB.strokeRect(16, 16, 224, 224);
+        ctxB.lineWidth = 12;
+        ctxB.strokeRect(14, 14, 228, 228);
         ctxB.beginPath();
-        ctxB.arc(128, 128, 75, 0, Math.PI * 2);
+        ctxB.arc(128, 128, 76, 0, Math.PI * 2);
         ctxB.stroke();
         ctxB.fillStyle = '#f59e0b';
-        ctxB.font = 'bold 38px sans-serif';
+        ctxB.font = 'bold 36px sans-serif';
         ctxB.textAlign = 'center';
         ctxB.textBaseline = 'middle';
         ctxB.fillText('SKULL', 128, 128);
@@ -277,11 +431,11 @@
         ctxF.fillStyle = '#831843';
         ctxF.fillRect(0, 0, 256, 256);
         ctxF.strokeStyle = '#f472b6';
-        ctxF.lineWidth = 12;
+        ctxF.lineWidth = 14;
         ctxF.beginPath();
-        ctxF.arc(128, 128, 95, 0, Math.PI * 2);
+        ctxF.arc(128, 128, 96, 0, Math.PI * 2);
         ctxF.stroke();
-        ctxF.font = '115px sans-serif';
+        ctxF.font = '118px sans-serif';
         ctxF.textAlign = 'center';
         ctxF.textBaseline = 'middle';
         ctxF.fillText('🌸', 128, 128);
@@ -294,11 +448,11 @@
         ctxS.fillStyle = '#09090b';
         ctxS.fillRect(0, 0, 256, 256);
         ctxS.strokeStyle = '#ef4444';
-        ctxS.lineWidth = 14;
+        ctxS.lineWidth = 16;
         ctxS.beginPath();
-        ctxS.arc(128, 128, 95, 0, Math.PI * 2);
+        ctxS.arc(128, 128, 96, 0, Math.PI * 2);
         ctxS.stroke();
-        ctxS.font = '115px sans-serif';
+        ctxS.font = '118px sans-serif';
         ctxS.textAlign = 'center';
         ctxS.textBaseline = 'middle';
         ctxS.fillText('💀', 128, 128);
@@ -307,54 +461,46 @@
         return { texBack, texFlower, texSkull };
       }
 
-      const { texBack, texFlower, texSkull } = createTextures();
+      const { texBack, texFlower, texSkull } = createCardTextures();
 
       // ----------------------------------------------------
-      // 3. 全プレイヤーのディスク管理
+      // 5. カード（ディスク）メッシュ生成 & 4枚固定配置
       // ----------------------------------------------------
-      // 全ディスクメッシュ配列
       const allDiscs = [];
 
-      // ディスクメッシュ生成
-      // ownerSeat: 0 (自分), 1〜7 (他人)
-      // discType: 'flower' or 'skull'
-      function createDisc(id, ownerSeat, discType, initPos, isFaceUp = false) {
-        const geo = new THREE.CylinderGeometry(0.85, 0.85, 0.08, 32);
+      function createDiscMesh(id, owner, type, isFaceUp, x, z) {
+        const geo = new THREE.CylinderGeometry(0.92, 0.92, 0.1, 32);
 
-        // マテリアル設定:
-        // [側面, 上面, 下面]
-        // 相手の画面からは手札の中身は見えない（裏面）！
-        // 自分の画面（ownerSeat === 0）では、手元にある時も自分には何かわかるように上面にテクスチャを設定
-        const isMyDisc = ownerSeat === 0;
-
-        const matSide = new THREE.MeshStandardMaterial({ color: 0xd97706, metalness: 0.5, roughness: 0.3 });
+        const matSide = new THREE.MeshStandardMaterial({
+          color: 0xd97706,
+          metalness: 0.6,
+          roughness: 0.3
+        });
         const matTop = new THREE.MeshStandardMaterial({
-          map: discType === DISC_FLOWER ? texFlower : texSkull,
-          roughness: 0.4
+          map: type === DISC_FLOWER ? texFlower : texSkull,
+          roughness: 0.35
         });
         const matBottom = new THREE.MeshStandardMaterial({
           map: texBack,
-          roughness: 0.4
+          roughness: 0.35
         });
 
         const mesh = new THREE.Mesh(geo, [matSide, matTop, matBottom]);
         mesh.castShadow = true;
         mesh.receiveShadow = true;
+        mesh.position.set(x, 0.08, z);
 
-        mesh.position.copy(initPos);
-
-        // 表向き/裏向きの初期回転
-        // isFaceUp = true ➔ 上面(絵柄)が上
-        // isFaceUp = false ➔ 下面(裏面柄)が上 (X軸を180度反転)
+        // 表向き = 0 (上面の絵柄が見える), 裏向き = Math.PI (下面のSKULL裏面が見える)
         mesh.rotation.x = isFaceUp ? 0 : Math.PI;
 
         mesh.userData = {
           id: id,
-          ownerSeat: ownerSeat,
-          discType: discType,
+          owner: owner, // 'me' or 'opponent'
+          type: type,   // 'flower' or 'skull'
           isFaceUp: isFaceUp,
-          initPos: initPos.clone(),
-          targetPos: initPos.clone(),
+          targetX: x,
+          targetY: 0.08,
+          targetZ: z,
           targetRotX: mesh.rotation.x
         };
 
@@ -363,55 +509,88 @@
         return mesh;
       }
 
-      // 全プレイヤーのディスクを自陣手元に初期配置
-      function resetAllDiscsToHand() {
-        // 既存メッシュ削除
-        allDiscs.forEach(m => scene.remove(m));
+      // 4枚固定で初期配置 (花3枚、ドクロ1枚)
+      function initFixedCards() {
+        allDiscs.forEach(d => scene.remove(d));
         allDiscs.length = 0;
 
-        // 最大8席のプレイヤーに各4枚配る
-        for (let seat = 0; seat < MAX_SEATS; seat++) {
-          const sPos = seatPositions[seat];
+        const types = [DISC_FLOWER, DISC_FLOWER, DISC_FLOWER, DISC_SKULL];
 
-          // 自陣手元エリアのオフセット計算
-          // Seat 0 (自分) は画面手前下側に横1列に4枚綺麗に並べる！
-          if (seat === 0) {
-            const types = [DISC_FLOWER, DISC_FLOWER, DISC_FLOWER, DISC_SKULL];
-            const startX = -2.8;
-            const stepX = 1.85;
+        // 1. 自分の手札 (手前4スロット、自分には何かわかるよう初期は表向き)
+        types.forEach((type, idx) => {
+          const slot = myHandSlots[idx];
+          createDiscMesh(`my_${idx}`, 'me', type, true, slot.x, slot.z);
+        });
 
-            types.forEach((type, idx) => {
-              const pos = new THREE.Vector3(startX + (idx * stepX), 0.08, 6.8);
-              // 自分には手元で何かわかるように【表向き】で手元に並べる！
-              createDisc(`disc_${seat}_${idx}`, seat, type, pos, true);
-            });
-          } else {
-            // 他の座席 (1〜7): 各席の後ろ側に伏せて4枚並べる
-            const types = [DISC_FLOWER, DISC_FLOWER, DISC_FLOWER, DISC_SKULL];
-            const angle = sPos.angle;
-            const dist = TABLE_RADIUS + 1.6;
+        // 2. 相手の手札 (奥4スロット、裏向き)
+        types.forEach((type, idx) => {
+          const slot = opHandSlots[idx];
+          createDiscMesh(`op_${idx}`, 'opponent', type, false, slot.x, slot.z);
+        });
+      }
 
-            types.forEach((type, idx) => {
-              const spread = (idx - 1.5) * 0.45;
-              const ox = Math.cos(angle) * dist + Math.sin(angle) * spread;
-              const oz = Math.sin(angle) * dist - Math.cos(angle) * spread;
-              const pos = new THREE.Vector3(ox, 0.08, oz);
+      initFixedCards();
 
-              // 相手のディスクは自分からは【裏向き】に見える！
-              createDisc(`disc_${seat}_${idx}`, seat, type, pos, false);
-            });
-          }
+      // ----------------------------------------------------
+      // 6. スマート吸着（スナップ）システム
+      // ----------------------------------------------------
+      // ドロップした位置から最適なスロットへ吸着し、重なりを防止
+      function snapToNearestZone(disc) {
+        const x = disc.position.x;
+        const z = disc.position.z;
+
+        // 1. 没収エリア判定 (X > 4.8)
+        if (x > 4.8) {
+          // 最も空いている没収スロットへ
+          let bestSlot = forfeitSlots[0];
+          let minDist = 999;
+          forfeitSlots.forEach(slot => {
+            const occupied = allDiscs.some(d => d !== disc && Math.hypot(d.position.x - slot.x, d.position.z - slot.z) < 0.6);
+            const dist = Math.hypot(x - slot.x, z - slot.z);
+            if (!occupied && dist < minDist) {
+              minDist = dist;
+              bestSlot = slot;
+            }
+          });
+          disc.position.x = bestSlot.x;
+          disc.position.z = bestSlot.z;
+          bridge.showToast('💀 カードを【没収エリア】へ移動しました');
+          return;
         }
+
+        // 2. 自分の手札エリア判定 (Z > 2.5)
+        if (z > 2.5 && disc.userData.owner === 'me') {
+          // 最も近い手札スロットへ
+          let bestSlot = myHandSlots[0];
+          let minDist = 999;
+          myHandSlots.forEach(slot => {
+            const dist = Math.hypot(x - slot.x, z - slot.z);
+            if (dist < minDist) {
+              minDist = dist;
+              bestSlot = slot;
+            }
+          });
+          disc.position.x = bestSlot.x;
+          disc.position.z = bestSlot.z;
+          return;
+        }
+
+        // 3. プレイエリア (中央ゾーン)
+        // 他のカードと真上にぴったり重ならないように、少しずらして整列
+        allDiscs.forEach(other => {
+          if (other !== disc && Math.hypot(other.position.x - disc.position.x, other.position.z - disc.position.z) < 0.5) {
+            disc.position.x += 0.5;
+            disc.position.z += 0.3;
+          }
+        });
       }
 
       // ----------------------------------------------------
-      // 4. ドラッグ＆ドロップ ＆ ダブルクリック反転
+      // 7. マウス / タッチ インタラクション (ドラッグ＆めくり)
       // ----------------------------------------------------
       const raycaster = new THREE.Raycaster();
       const pointer = new THREE.Vector2();
-
-      // 水平ドラッグ用平面 (y = 0.4)
-      const dragPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -0.35);
+      const dragPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -0.4);
       const planeIntersect = new THREE.Vector3();
 
       let draggedDisc = null;
@@ -419,8 +598,7 @@
       let lastClickTime = 0;
       let lastClickedDisc = null;
 
-      // 座標変換
-      function setPointerCoords(e) {
+      function updatePointer(e) {
         const rect = canvasContainer.getBoundingClientRect();
         const clientX = e.clientX || (e.touches && e.touches[0].clientX);
         const clientY = e.clientY || (e.touches && e.touches[0].clientY);
@@ -428,9 +606,8 @@
         pointer.y = -((clientY - rect.top) / rect.height) * 2 + 1;
       }
 
-      // マウス/タッチダウン (掴む / ダブルクリック判定)
       function onPointerDown(e) {
-        setPointerCoords(e);
+        updatePointer(e);
         raycaster.setFromCamera(pointer, camera);
 
         const intersects = raycaster.intersectObjects(allDiscs);
@@ -438,9 +615,8 @@
           const hitMesh = intersects[0].object;
           const now = Date.now();
 
-          // ダブルクリック判定 (300ms以内の連続タップ)
+          // ダブルクリック判定 (表裏をひっくり返す)
           if (now - lastClickTime < 320 && lastClickedDisc === hitMesh) {
-            // ★ ダブルクリックで反転 (ひっくり返す)！
             flipDisc(hitMesh, true);
             lastClickTime = 0;
             lastClickedDisc = null;
@@ -454,54 +630,49 @@
           draggedDisc = hitMesh;
           canvasContainer.classList.add('grabbing');
           dragHint.classList.remove('hidden');
+          draggedDisc.position.y = 0.65; // つまみ上げ
 
-          // 少し持ち上げる
-          draggedDisc.position.y = 0.55;
-
-          // 平面との交点をオフセットとして記憶
           if (raycaster.ray.intersectPlane(dragPlane, planeIntersect)) {
             dragOffset.copy(planeIntersect).sub(draggedDisc.position);
           }
         }
       }
 
-      // マウス/タッチ移動 (ドラッグ移動)
       function onPointerMove(e) {
         if (!draggedDisc) return;
-        setPointerCoords(e);
+        updatePointer(e);
         raycaster.setFromCamera(pointer, camera);
 
         if (raycaster.ray.intersectPlane(dragPlane, planeIntersect)) {
-          const targetX = planeIntersect.x - dragOffset.x;
-          const targetZ = planeIntersect.z - dragOffset.z;
+          const nx = planeIntersect.x - dragOffset.x;
+          const nz = planeIntersect.z - dragOffset.z;
 
-          draggedDisc.position.x = targetX;
-          draggedDisc.position.z = targetZ;
+          // テーブル枠外に出ないよう制限
+          draggedDisc.position.x = Math.max(-9.0, Math.min(9.0, nx));
+          draggedDisc.position.z = Math.max(-6.0, Math.min(6.0, nz));
 
-          // P2P リアルタイム同期送信
           if (bridge.isConnected()) {
             bridge.send({
               game: 'skull',
               type: 'drag_move',
               id: draggedDisc.userData.id,
-              x: targetX,
+              x: draggedDisc.position.x,
               y: draggedDisc.position.y,
-              z: targetZ
+              z: draggedDisc.position.z
             });
           }
         }
       }
 
-      // マウス/タッチアップ (着地)
-      function onPointerUp(e) {
+      function onPointerUp() {
         if (!draggedDisc) return;
 
-        // テーブルに着地 (y = 0.08)
         draggedDisc.position.y = 0.08;
+        snapToNearestZone(draggedDisc);
+
         canvasContainer.classList.remove('grabbing');
         dragHint.classList.add('hidden');
 
-        // P2P 着地同期送信
         if (bridge.isConnected()) {
           bridge.send({
             game: 'skull',
@@ -516,11 +687,9 @@
         draggedDisc = null;
       }
 
-      // ディスク反転処理 (ひっくり返す)
+      // 反転アニメーション (ひっくり返す)
       function flipDisc(mesh, isLocal = false) {
         mesh.userData.isFaceUp = !mesh.userData.isFaceUp;
-
-        // 反転アニメーション (180度回転)
         animateFlip(mesh, mesh.userData.isFaceUp);
 
         if (isLocal && bridge.isConnected()) {
@@ -532,21 +701,22 @@
           });
         }
 
-        const faceName = mesh.userData.isFaceUp ? (mesh.userData.discType === DISC_FLOWER ? '🌸 花' : '💀 ドクロ') : '伏せ(裏面)';
-        bridge.showToast(`ディスクを裏返しました: 【${faceName}】`);
+        const faceName = mesh.userData.isFaceUp 
+          ? (mesh.userData.type === DISC_FLOWER ? '🌸 花' : '💀 ドクロ') 
+          : '伏せ (裏面)';
+        bridge.showToast(`カードを裏返しました: 【${faceName}】`);
       }
 
-      // スムーズ反転アニメーション
       function animateFlip(mesh, toFaceUp) {
         let progress = 0;
         const startRot = mesh.rotation.x;
         const targetRot = toFaceUp ? 0 : Math.PI;
 
         function step() {
-          progress += 0.12;
+          progress += 0.14;
           if (progress <= 1) {
             mesh.rotation.x = startRot + (targetRot - startRot) * progress;
-            mesh.position.y = 0.08 + Math.sin(progress * Math.PI) * 0.6;
+            mesh.position.y = 0.08 + Math.sin(progress * Math.PI) * 0.7;
             requestAnimationFrame(step);
           } else {
             mesh.rotation.x = targetRot;
@@ -556,7 +726,7 @@
         step();
       }
 
-      // イベントリスナー登録 (マウス & スマホタッチ)
+      // リスナー登録
       canvasContainer.addEventListener('mousedown', onPointerDown);
       window.addEventListener('mousemove', onPointerMove);
       window.addEventListener('mouseup', onPointerUp);
@@ -565,46 +735,86 @@
       window.addEventListener('touchmove', onPointerMove, { passive: true });
       window.addEventListener('touchend', onPointerUp);
 
-      // 手元に配り直すボタン
-      btnCollectDiscs.addEventListener('click', () => {
-        resetAllDiscsToHand();
-        bridge.showToast('全ディスクを手元に配り直しました！');
+      // 手元に4枚きれいに整列するボタン
+      btnResetHand.addEventListener('click', () => {
+        const myDiscs = allDiscs.filter(d => d.userData.owner === 'me');
+        myDiscs.forEach((disc, idx) => {
+          const slot = myHandSlots[idx];
+          disc.position.set(slot.x, 0.08, slot.z);
+        });
+        bridge.showToast('自分の手札4枚を手元スロットに整列しました！');
         if (bridge.isConnected()) {
-          bridge.send({ game: 'skull', type: 'reset_discs' });
+          bridge.send({ game: 'skull', type: 'align_hand' });
         }
       });
 
+      // 全て伏せるボタン
+      btnFlipAllDown.addEventListener('click', () => {
+        const myDiscs = allDiscs.filter(d => d.userData.owner === 'me');
+        myDiscs.forEach(disc => {
+          if (disc.userData.isFaceUp) {
+            flipDisc(disc, true);
+          }
+        });
+        bridge.showToast('手札をすべて裏向きに伏せました！');
+      });
+
       // ----------------------------------------------------
-      // 5. P2P 同期イベント
+      // 8. P2P 同期イベント
       // ----------------------------------------------------
       bridge.onReceive((data) => {
         if (data.game !== 'skull') return;
 
+        // 相手側座標の対称変換: 相手の X, Z を点対称反転 (-x, -z)
         if (data.type === 'drag_move' || data.type === 'drag_drop') {
-          const target = allDiscs.find(d => d.userData.id === data.id);
+          // IDマッピング: 相手の 'my_x' はこちら側の 'op_x'
+          let mappedId = data.id;
+          if (data.id.startsWith('my_')) mappedId = data.id.replace('my_', 'op_');
+          else if (data.id.startsWith('op_')) mappedId = data.id.replace('op_', 'my_');
+
+          const target = allDiscs.find(d => d.userData.id === mappedId);
           if (target && target !== draggedDisc) {
-            target.position.set(data.x, data.y, data.z);
+            target.position.set(-data.x, data.y, -data.z);
+            if (data.type === 'drag_drop') {
+              snapToNearestZone(target);
+            }
           }
         } else if (data.type === 'flip') {
-          const target = allDiscs.find(d => d.userData.id === data.id);
+          let mappedId = data.id;
+          if (data.id.startsWith('my_')) mappedId = data.id.replace('my_', 'op_');
+          else if (data.id.startsWith('op_')) mappedId = data.id.replace('op_', 'my_');
+
+          const target = allDiscs.find(d => d.userData.id === mappedId);
           if (target) {
             target.userData.isFaceUp = data.isFaceUp;
             animateFlip(target, data.isFaceUp);
           }
-        } else if (data.type === 'reset_discs') {
-          resetAllDiscsToHand();
-          bridge.showToast('ホストがディスクを配り直しました！');
+        } else if (data.type === 'align_hand') {
+          const opDiscs = allDiscs.filter(d => d.userData.owner === 'opponent');
+          opDiscs.forEach((disc, idx) => {
+            const slot = opHandSlots[idx];
+            disc.position.set(slot.x, 0.08, slot.z);
+          });
+          bridge.showToast('相手が手札をスロットに整列しました');
         }
       });
 
-      // 相手合流イベント
+      // 相手合流時
       bridge.onPlayerJoined(() => {
-        resetAllDiscsToHand();
-        bridge.showToast('対戦相手が合流しました！3Dスカル卓へようこそ！');
+        bridge.showToast('対戦相手が着席しました！花3枚・ドクロ1枚で勝負開始！');
       });
 
-      // リサイズハンドラ
-      function onResize() {
+      // ----------------------------------------------------
+      // 9. アニメーションループ & リサイズ
+      // ----------------------------------------------------
+      function animate() {
+        if (isDestroyed) return;
+        animFrameId = requestAnimationFrame(animate);
+        renderer.render(scene, camera);
+      }
+      animate();
+
+      function handleResize() {
         if (!canvasContainer) return;
         const w = canvasContainer.clientWidth;
         const h = canvasContainer.clientHeight;
@@ -612,39 +822,22 @@
         camera.updateProjectionMatrix();
         renderer.setSize(w, h);
       }
-      window.addEventListener('resize', onResize);
+      window.addEventListener('resize', handleResize);
 
-      // ----------------------------------------------------
-      // 6. アニメーションレンダリングループ (回転なし・固定卓)
-      // ----------------------------------------------------
-      function animate() {
-        if (isDestroyed) return;
-        animFrameId = requestAnimationFrame(animate);
-
-        // ※テーブルの自動回転は完全停止！正面固定！
-
-        renderer.render(scene, camera);
-      }
-
-      // 初期化実行
-      resetAllDiscsToHand();
-      animate();
-
-      // アンマウント時クリーンアップ
-      this.unmount = () => {
+      // アンマウント処理
+      this.cleanup = () => {
         isDestroyed = true;
-        cancelAnimationFrame(animFrameId);
-        window.removeEventListener('resize', onResize);
+        if (animFrameId) cancelAnimationFrame(animFrameId);
+        window.removeEventListener('resize', handleResize);
+        canvasContainer.removeEventListener('mousedown', onPointerDown);
         window.removeEventListener('mousemove', onPointerMove);
         window.removeEventListener('mouseup', onPointerUp);
-        window.removeEventListener('touchmove', onPointerMove);
-        window.removeEventListener('touchend', onPointerUp);
         renderer.dispose();
       };
     },
 
     unmount() {
-      if (this.unmount) this.unmount();
+      if (this.cleanup) this.cleanup();
     }
   });
 })();

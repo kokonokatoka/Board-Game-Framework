@@ -1448,10 +1448,16 @@
   // ==========================================
   // 13. ゲーム起動 & マウント
   // ==========================================
+  let activeUnmountFn = null;
+
   function launchGame(gameId) {
     const game = state.games.get(gameId);
     if (!game) return;
 
+    if (activeUnmountFn) {
+      try { activeUnmountFn(); } catch (e) {}
+      activeUnmountFn = null;
+    }
     if (state.activeGame && state.activeGame.unmount) {
       state.activeGame.unmount();
     }
@@ -1498,7 +1504,10 @@
     };
 
     if (game.mount) {
-      game.mount(el.mountPoint, p2pBridge);
+      const res = game.mount(el.mountPoint, p2pBridge);
+      if (typeof res === 'function') {
+        activeUnmountFn = res;
+      }
     }
   }
 
@@ -1547,6 +1556,14 @@
       state.peer = null;
     }
     initPeer();
+    if (activeUnmountFn) {
+      try { activeUnmountFn(); } catch (e) {}
+      activeUnmountFn = null;
+    }
+    if (activeUnmountFn) {
+      try { activeUnmountFn(); } catch (e) {}
+      activeUnmountFn = null;
+    }
     if (state.activeGame && state.activeGame.unmount) {
       state.activeGame.unmount();
     }
