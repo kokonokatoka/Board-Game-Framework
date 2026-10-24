@@ -39,11 +39,13 @@
     dominion_crown: 'assets/models/dominion_crown.glb',
     dominion_coin: 'assets/models/dominion_coin.glb',
     dominion_shield: 'assets/models/dominion_shield.glb',
-    geister_ghost: 'assets/models/geister_ghost.glb'
+    geister_ghost: 'assets/models/geister_ghost.glb',
+    deepsea_sub: 'assets/models/deepsea_sub.glb',
+    deepsea_diver: 'assets/models/deepsea_diver.glb'
   };
 
-  // 既に独自3D実装を持つ7ゲームはラッパー対象外
-  const NATIVE_3D_GAMES = new Set(['skull', 'gobblet', 'block_battle_3d', 'splendor', 'catan', 'dominion', 'geister']);
+  // 既に独自3D実装を持つ8ゲームはラッパー対象外
+  const NATIVE_3D_GAMES = new Set(['skull', 'gobblet', 'block_battle_3d', 'splendor', 'catan', 'dominion', 'geister', 'deep_sea']);
 
   const glbCache = new Map();
   let threeLoadPromise = null;
