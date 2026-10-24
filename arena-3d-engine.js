@@ -30,11 +30,12 @@
     yacht_die: 'assets/models/yacht_die.glb',
     poker_chip: 'assets/models/poker_chip.glb',
     blokus_block: 'assets/models/blokus_block.glb',
-    dab_pillar: 'assets/models/dab_pillar.glb'
+    dab_pillar: 'assets/models/dab_pillar.glb',
+    splendor_token: 'assets/models/splendor_token.glb'
   };
 
-  // 既に独自3D実装を持つ3ゲームはラッパー対象外
-  const NATIVE_3D_GAMES = new Set(['skull', 'gobblet', 'block_battle_3d']);
+  // 既に独自3D実装を持つ4ゲームはラッパー対象外
+  const NATIVE_3D_GAMES = new Set(['skull', 'gobblet', 'block_battle_3d', 'splendor']);
 
   const glbCache = new Map();
   let threeLoadPromise = null;
