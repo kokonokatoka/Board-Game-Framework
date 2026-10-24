@@ -1,25 +1,26 @@
 /**
- * 👾 3D ゴブレットゴブラーズ (Gobblet Gobblers 3D Pro Edition)
- * Board Arena Plugin - Complete Three.js 3D Interactive Edition
+ * ゴブレット ゴブラーズ (Gobblet Gobblers) 2人
+ * 大・中・小のコマで遊ぶ三目並べ。大きいコマは小さいコマにかぶせて乗っ取れる。
  *
- * Features:
- * - 本格 Three.js 3D 立体ゴブラー（大・中・小の3サイズ、動く目玉・トサカ・中空ドーム構造）
- * - 立体3×3クロスバー盤面 ＆ 両プレイヤーの3D待機ベンチ（全12体のコマを3D空間に完全配置）
- * - 3Dレイキャスト直接操作（コマをクリックすると空中に浮き上がり、ターゲットマスで上からガブッと被さる放物線アニメーション）
- * - 盤上のコマを持ち上げた際、下に隠れていたコマが実際に3Dで現れるリアル構造
- * - 2Dクイック操作ドック併設・カメラ視点プリセット（斜め3D / 真上 / ドラッグ自由回転）
- * - 記憶＆先読み搭載の賢いCPU AI（ふつう / つよい切替）＋ Web Audio API 効果音 ＋ P2Pオンライン対戦対応
+ * - 公式ルール: 手番には手持ちのコマを置くか、盤上の自分のコマ (いちばん上) を動かす。
+ *   動かしたことで下にいた相手のコマの列が現れたら、相手の勝ち。
+ * - CPU (つよい) は自分の手のあとに相手がすぐ勝てる手を避ける。ふつうは少しぶれる
+ * - オンライン対戦では手を相手に送る
+ * - 卓は共通エンジン (arena-3d-engine.js) のステージに、木の格子と樹脂のゴブラーを置いて描く
  */
 
 (function () {
-  const P1 = 1; // オレンジ (あなた / Host)
-  const P2 = 2; // ブルー (CPU / 相手 / Guest)
+  const P1 = 1; // オレンジ (あなた / ホスト)
+  const P2 = 2; // ブルー (CPU / 相手 / ゲスト)
 
   const SIZES = {
-    1: { name: '小 (S)', short: 'S', radius: 0.42, height: 0.78, liftY: 1.55, colorBoost: 0 },
-    2: { name: '中 (M)', short: 'M', radius: 0.64, height: 1.15, liftY: 1.85, colorBoost: 1 },
-    3: { name: '大 (L)', short: 'L', radius: 0.88, height: 1.55, liftY: 2.15, colorBoost: 2 }
+    1: { name: '小', radius: 0.42, height: 0.72, lift: 1.7 },
+    2: { name: '中', radius: 0.62, height: 1.02, lift: 1.95 },
+    3: { name: '大', radius: 0.82, height: 1.34, lift: 2.2 }
   };
+
+  const COLORS = { [P1]: '#e07a2e', [P2]: '#2f78c4' };
+  const COLOR_NAMES = { [P1]: 'オレンジ', [P2]: 'ブルー' };
 
   const WIN_LINES = [
     [[0, 0], [0, 1], [0, 2]],
@@ -32,26 +33,7 @@
     [[0, 2], [1, 1], [2, 0]]
   ];
 
-  // Three.js CDN ローダー
-  function loadThreeJS() {
-    return new Promise((resolve, reject) => {
-      if (window.THREE) return resolve(window.THREE);
-      const existing = document.querySelector('script[data-three-cdn="true"]');
-      if (existing) {
-        existing.addEventListener('load', () => resolve(window.THREE));
-        existing.addEventListener('error', reject);
-        return;
-      }
-      const script = document.createElement('script');
-      script.src = 'https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js';
-      script.dataset.threeCdn = 'true';
-      script.onload = () => resolve(window.THREE);
-      script.onerror = reject;
-      document.head.appendChild(script);
-    });
-  }
-
-  // Web Audio API 効果音
+  // Web Audio 効果音
   function createGobbletSfx() {
     let ctx = null;
     function ensure() {
@@ -90,7 +72,6 @@
         tone(420, 0.05, 'sine', 0.06, 0.03);
       },
       gobble() {
-        // ガブッと被せる効果音
         tone(620, 0.14, 'sawtooth', 0.08, 0, 180);
         tone(160, 0.12, 'triangle', 0.14, 0.09, 95);
       },
@@ -105,758 +86,296 @@
 
   window.BoardArena.registerGame({
     id: 'gobblet',
-    name: '3D ゴブレットゴブラーズ',
-    category: '🎩 立体三目並べ (3D)',
-    icon: '👾',
+    name: 'ゴブレット ゴブラーズ',
+    category: '三目並べ',
+    icon: '',
     players: '1〜2人',
     playTime: '3-5分',
-    description: '大・中・小の立体モンスターコマを上から「ガブッ！」と被せて乗っ取る進化系3D三目並べ！記憶と読み合いの心理戦！',
+    description: '大・中・小のコマで遊ぶ三目並べ。大きいコマは小さいコマにかぶせて乗っ取れる。隠れたコマを覚えておく読み合い。',
 
     mount(container, bridge) {
       let isDestroyed = false;
-      let animFrameId = null;
+      let cpuTimer = null;
       const sfx = createGobbletSfx();
 
-      // ゲーム状態
-      // board[r][c] は { id, player, size } のスタック配列
+      // board[r][c] は { id, player, size } の積み重ね (末尾がいちばん上)
       let board = [
         [[], [], []],
         [[], [], []],
         [[], [], []]
       ];
-      // ベンチ待機中のコマ: benchSlots[player] = 6スロット (size 3,3,2,2,1,1)
+      // 手持ち: benchPieces[player] = 6個 (大2・中2・小2)
       let benchPieces = { [P1]: [], [P2]: [] };
 
       let currentTurn = P1;
       let isGameOver = false;
       let winningLineCoords = null;
       let winnerPlayer = null;
+      let resultSub = '';
       let vsCpu = !bridge.isConnected();
-      let cpuHard = true; // デフォルトで賢いAI
+      let cpuHard = true;
       let myPlayer = bridge.isHost ? P1 : P2;
+      let gameSerial = 0;
 
-      // 選択中のコマ:
-      // { type: 'hand', player, size, pieceId } または { type: 'board', r, c, player, size, pieceId }
+      // 選んでいるコマ: { type: 'hand', player, size, pieceId } / { type: 'board', r, c, player, size, pieceId }
       let selectedPiece = null;
-      let hoveredCell = null; // { r, c }
 
-      // HTML レイアウト (画面幅最大・フローティングHUD＋下部スリムドック)
       container.innerHTML = `
-        <div class="gob3d-wrapper">
-          <div class="gob3d-stage" id="gob3d-stage">
-            <!-- 左上ステータス＆手番HUD -->
-            <div class="gob3d-hud-topleft">
-              <div class="gob3d-turn-pill" id="gob3d-turn-badge">🟠 あなたの手番 (オレンジ)</div>
-              <div class="gob3d-hint-pill" id="gob3d-hint">手持ちまたは盤面のコマをクリックして選択</div>
-            </div>
+        <style>
+          .gob-wrapper {
+            width: 100%;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            user-select: none;
+            color: var(--text);
+            font-family: var(--font-ui);
+          }
+          .gob-top-bar, .gob-dock {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            flex-wrap: wrap;
+            gap: 10px 16px;
+            padding: 10px 12px;
+            background: var(--bg-raised);
+            border: 1px solid var(--line);
+            border-radius: 6px;
+          }
+          .gob-players-row { display: flex; flex-wrap: wrap; gap: 6px; flex: 1 1 380px; min-width: 0; }
+          .gob-player {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 7px 12px 7px 10px;
+            background: var(--surface);
+            border: 1px solid var(--line);
+            border-radius: 4px;
+            transition: border-color 0.25s, background 0.25s;
+          }
+          .gob-player.is-turn { border-color: rgba(226, 184, 103, 0.6); background: rgba(226, 184, 103, 0.07); }
+          .gob-swatch { flex: none; width: 12px; height: 12px; border-radius: 50%; background: var(--c); box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.35); }
+          .gob-player-name { font-size: 13px; font-weight: 700; white-space: nowrap; }
+          .gob-player-sub { display: flex; gap: 10px; margin-top: 2px; font-size: 11px; color: var(--text-3); white-space: nowrap; font-variant-numeric: tabular-nums; }
+          .gob-controls, .gob-actions { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+          .gob-actions { justify-content: flex-end; }
+          .gob-btn, .gob-select {
+            appearance: none;
+            -webkit-appearance: none;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 6px 12px;
+            background: transparent;
+            border: 1px solid var(--line-strong);
+            border-radius: 4px;
+            color: var(--text-2);
+            font: 500 12px/1.4 var(--font-ui);
+            letter-spacing: 0.04em;
+            white-space: nowrap;
+            cursor: pointer;
+            transition: color 0.2s, border-color 0.2s, background 0.2s;
+          }
+          .gob-select {
+            padding-right: 28px;
+            background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M1 1l4 4 4-4' fill='none' stroke='%23a8a6a0' stroke-width='1.2'/%3E%3C/svg%3E") no-repeat right 10px center;
+          }
+          .gob-select option { background: #161618; color: #ecebe6; }
+          .gob-select:disabled { opacity: 0.5; cursor: default; }
+          .gob-btn:hover:not(:disabled), .gob-select:hover:not(:disabled) { color: var(--text); border-color: rgba(255, 255, 255, 0.34); }
+          .gob-btn:disabled { opacity: 0.35; cursor: not-allowed; }
+          .gob-btn.is-primary { background: var(--text); border-color: var(--text); color: var(--text-inverse); font-weight: 700; }
+          .gob-btn.is-primary:hover:not(:disabled) { background: #fff; color: var(--text-inverse); }
+          .gob-size {
+            display: inline-flex;
+            align-items: center;
+            gap: 7px;
+            padding: 6px 11px;
+            background: transparent;
+            border: 1px solid var(--line-strong);
+            border-radius: 4px;
+            color: var(--text);
+            font: 500 12px/1.3 var(--font-ui);
+            font-variant-numeric: tabular-nums;
+            cursor: pointer;
+            transition: border-color 0.2s, background 0.2s;
+          }
+          .gob-size i { flex: none; border-radius: 50%; background: var(--c); box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.3); }
+          .gob-size small { color: var(--text-3); }
+          .gob-size:hover:not(:disabled) { border-color: rgba(226, 184, 103, 0.7); }
+          .gob-size.is-selected { border-color: rgba(226, 184, 103, 0.85); background: rgba(226, 184, 103, 0.1); }
+          .gob-size:disabled { opacity: 0.35; cursor: default; }
 
-            <!-- 右上モード＆カメラ操作HUD -->
-            <div class="gob3d-hud-topright">
-              <button id="gob3d-mode-btn" class="gob3d-hud-btn active">${vsCpu ? '🤖 CPU対戦 (強)' : '👥 2人対戦'}</button>
-              <button id="gob3d-cam-angle-btn" class="gob3d-hud-btn" title="斜め3D視点 / 真上視点の切替">🎥 視点切替</button>
-              <button id="gob3d-restart-top-btn" class="gob3d-hud-btn" title="ゲームを最初からやり直す">🔄 リセット</button>
-            </div>
+          .gob-stage-wrap { position: relative; }
+          .gob-stage-wrap .ba3d-stage { height: clamp(440px, calc(100vh - 290px), 860px); }
+          .gob-status {
+            position: absolute;
+            top: 12px;
+            left: 12px;
+            z-index: 5;
+            max-width: min(480px, calc(100% - 130px));
+            padding: 9px 13px;
+            background: rgba(14, 12, 11, 0.62);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 4px;
+            backdrop-filter: blur(8px);
+            -webkit-backdrop-filter: blur(8px);
+            color: #ecebe6;
+            pointer-events: none;
+          }
+          .gob-phase { font-size: 10px; letter-spacing: 0.14em; color: rgba(236, 235, 230, 0.55); }
+          .gob-announce { margin-top: 3px; font-size: 13px; line-height: 1.55; }
+          .gob-dock-info { display: flex; flex-direction: column; gap: 3px; flex: 1 1 280px; min-width: 0; }
+          .gob-dock-label { font-size: 11px; letter-spacing: 0.08em; color: var(--text-3); }
+          .gob-dock-text { font-size: 13px; color: var(--text); }
+          .gob-wait { font-size: 12px; color: var(--text-3); }
 
-            <!-- 勝敗オーバーレイ -->
-            <div id="gob3d-result-overlay" class="gob3d-result-overlay hidden">
-              <div class="gob3d-result-card">
-                <div class="gob3d-result-title" id="gob3d-res-text">🎉 オレンジの勝利！</div>
-                <div class="gob3d-result-sub" id="gob3d-res-sub">3つのゴブラーが一列に並びました！</div>
-                <button id="gob3d-restart-btn" class="btn btn-primary">もう一度遊ぶ</button>
+          .gob-modal-overlay {
+            position: absolute;
+            inset: 0;
+            z-index: 20;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 16px;
+            background: rgba(8, 7, 6, 0.5);
+            backdrop-filter: blur(4px);
+            -webkit-backdrop-filter: blur(4px);
+          }
+          .gob-modal-overlay.hidden { display: none; }
+          .gob-modal-box {
+            width: min(400px, 100%);
+            padding: 24px;
+            text-align: center;
+            background: var(--bg-raised);
+            border: 1px solid var(--line-strong);
+            border-radius: 6px;
+            box-shadow: 0 24px 60px rgba(0, 0, 0, 0.6);
+          }
+          .gob-modal-title { font-size: 19px; font-weight: 700; }
+          .gob-modal-desc { margin-top: 8px; font-size: 13px; line-height: 1.7; color: var(--text-2); }
+          .gob-modal-actions { display: flex; gap: 6px; justify-content: center; margin-top: 18px; }
+
+          @media (max-width: 640px) {
+            .gob-stage-wrap .ba3d-stage { height: min(64vh, 480px); }
+            .gob-status { max-width: calc(100% - 110px); }
+            .gob-announce { font-size: 12px; }
+          }
+        </style>
+
+        <div class="gob-wrapper">
+          <div class="gob-top-bar">
+            <div class="gob-players-row" id="gob-players-row"></div>
+            <div class="gob-controls">
+              <select id="gob-mode-sel" class="gob-select" aria-label="対戦モード">
+                <option value="cpu_hard">CPU: つよい</option>
+                <option value="cpu_normal">CPU: ふつう</option>
+                <option value="local">2人で遊ぶ</option>
+              </select>
+              <button class="gob-btn" id="gob-new-btn">新しいゲーム</button>
+            </div>
+          </div>
+
+          <div class="gob-stage-wrap" id="gob-stage-wrap">
+            <div class="gob-status">
+              <div class="gob-phase" id="gob-phase"></div>
+              <div class="gob-announce" id="gob-announce"></div>
+            </div>
+            <div class="gob-modal-overlay hidden" id="gob-result">
+              <div class="gob-modal-box">
+                <div class="gob-modal-title" id="gob-res-title"></div>
+                <p class="gob-modal-desc" id="gob-res-sub"></p>
+                <div class="gob-modal-actions">
+                  <button class="gob-btn" id="gob-res-close">盤面を見る</button>
+                  <button class="gob-btn is-primary" id="gob-res-again">もう一度遊ぶ</button>
+                </div>
               </div>
             </div>
           </div>
 
-          <!-- 下部クイック操作＆手持ちインジケーターバー -->
-          <div class="gob3d-bottom-dock">
-            <div class="gob3d-hand-group p1-group">
-              <span class="gob3d-hand-title p1">🟠 あなたの手持ち:</span>
-              <div class="gob3d-hand-btns" id="gob3d-p1-hand"></div>
-            </div>
-
-            <div class="gob3d-selected-banner" id="gob3d-selected-banner">
-              3D空間のコマを直接クリック、または左のボタンで選択（ドラッグで視点回転）
-            </div>
-
-            <div class="gob3d-hand-group p2-group">
-              <span class="gob3d-hand-title p2" id="gob3d-p2-label">🔵 CPUの手持ち:</span>
-              <div class="gob3d-hand-btns" id="gob3d-p2-hand"></div>
-            </div>
-          </div>
+          <div class="gob-dock" id="gob-dock"></div>
         </div>
       `;
 
-      if (!document.getElementById('gobblet-3d-pro-css')) {
-        const style = document.createElement('style');
-        style.id = 'gobblet-3d-pro-css';
-        style.textContent = `
-          .gob3d-wrapper {
-            display: flex;
-            flex-direction: column;
-            width: 100%;
-            max-width: 100%;
-            gap: 8px;
-            user-select: none;
-          }
-          .gob3d-stage {
-            position: relative;
-            width: 100%;
-            height: calc(100vh - 200px);
-            min-height: 480px;
-            max-height: 840px;
-            background: radial-gradient(circle at 50% 35%, #1e293b 0%, #090d16 90%);
-            border-radius: 16px;
-            border: 1px solid rgba(255, 255, 255, 0.12);
-            box-shadow: 0 18px 42px rgba(0, 0, 0, 0.65);
-            overflow: hidden;
-          }
-          .gob3d-stage canvas {
-            width: 100% !important;
-            height: 100% !important;
-            display: block;
-            cursor: grab;
-          }
-          .gob3d-stage canvas:active {
-            cursor: grabbing;
-          }
-          .gob3d-hud-topleft {
-            position: absolute;
-            top: 12px;
-            left: 14px;
-            z-index: 10;
-            display: flex;
-            flex-wrap: wrap;
-            align-items: center;
-            gap: 8px;
-            pointer-events: none;
-          }
-          .gob3d-turn-pill {
-            background: rgba(15, 23, 42, 0.85);
-            backdrop-filter: blur(8px);
-            border: 1px solid rgba(249, 115, 22, 0.5);
-            padding: 6px 14px;
-            border-radius: 999px;
-            font-size: 14px;
-            font-weight: 800;
-            color: #fb923c;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.4);
-          }
-          .gob3d-hint-pill {
-            background: rgba(15, 23, 42, 0.75);
-            backdrop-filter: blur(8px);
-            border: 1px solid rgba(255, 255, 255, 0.1);
-            padding: 5px 12px;
-            border-radius: 999px;
-            font-size: 12px;
-            font-weight: 600;
-            color: #cbd5e1;
-          }
-          .gob3d-hud-topright {
-            position: absolute;
-            top: 12px;
-            right: 14px;
-            z-index: 10;
-            display: flex;
-            gap: 8px;
-            flex-wrap: wrap;
-          }
-          .gob3d-hud-btn {
-            background: rgba(15, 23, 42, 0.82);
-            backdrop-filter: blur(8px);
-            border: 1px solid rgba(148, 163, 184, 0.3);
-            color: #e2e8f0;
-            font-size: 12px;
-            font-weight: 700;
-            padding: 6px 12px;
-            border-radius: 8px;
-            cursor: pointer;
-            transition: all 0.15s;
-          }
-          .gob3d-hud-btn:hover {
-            border-color: #38bdf8;
-            color: #fff;
-            transform: translateY(-1px);
-          }
-          .gob3d-hud-btn.active {
-            border-color: #38bdf8;
-            color: #38bdf8;
-          }
-          .gob3d-result-overlay {
-            position: absolute;
-            inset: 0;
-            z-index: 25;
-            background: rgba(9, 13, 22, 0.68);
-            backdrop-filter: blur(5px);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-          }
-          .gob3d-result-overlay.hidden {
-            display: none;
-          }
-          .gob3d-result-card {
-            background: rgba(15, 23, 42, 0.95);
-            border: 2px solid #f59e0b;
-            border-radius: 18px;
-            padding: 24px 36px;
-            text-align: center;
-            box-shadow: 0 20px 50px rgba(0,0,0,0.8);
-            display: flex;
-            flex-direction: column;
-            gap: 10px;
-            align-items: center;
-          }
-          .gob3d-result-title {
-            font-size: 26px;
-            font-weight: 900;
-            color: #facc15;
-          }
-          .gob3d-result-sub {
-            font-size: 13px;
-            color: #cbd5e1;
-            margin-bottom: 6px;
-          }
-          .gob3d-bottom-dock {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            gap: 12px;
-            background: #111827;
-            border: 1px solid #283548;
-            border-radius: 12px;
-            padding: 8px 16px;
-            flex-wrap: wrap;
-          }
-          .gob3d-hand-group {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-          }
-          .gob3d-hand-title {
-            font-size: 13px;
-            font-weight: 800;
-          }
-          .gob3d-hand-title.p1 { color: #fb923c; }
-          .gob3d-hand-title.p2 { color: #38bdf8; }
-          .gob3d-hand-btns {
-            display: flex;
-            gap: 6px;
-          }
-          .gob3d-size-btn {
-            display: flex;
-            align-items: center;
-            gap: 5px;
-            padding: 5px 11px;
-            border-radius: 8px;
-            font-size: 12px;
-            font-weight: 800;
-            cursor: pointer;
-            border: 2px solid transparent;
-            background: #1e293b;
-            color: #f8fafc;
-            transition: all 0.15s;
-          }
-          .gob3d-size-btn.p1 { border-color: rgba(249, 115, 22, 0.4); }
-          .gob3d-size-btn.p2 { border-color: rgba(56, 189, 248, 0.4); }
-          .gob3d-size-btn:hover:not(:disabled) {
-            transform: translateY(-2px);
-            background: #334155;
-          }
-          .gob3d-size-btn.selected {
-            border-color: #facc15 !important;
-            background: rgba(250, 204, 21, 0.18);
-            box-shadow: 0 0 12px rgba(250, 204, 21, 0.5);
-          }
-          .gob3d-size-btn:disabled {
-            opacity: 0.3;
-            cursor: not-allowed;
-          }
-          .gob3d-selected-banner {
-            font-size: 12px;
-            font-weight: 700;
-            color: #94a3b8;
-            text-align: center;
-            flex: 1;
-            min-width: 200px;
-          }
-        `;
-        document.head.appendChild(style);
+      const playersRowEl = container.querySelector('#gob-players-row');
+      const modeSelEl = container.querySelector('#gob-mode-sel');
+      const newBtnEl = container.querySelector('#gob-new-btn');
+      const stageWrapEl = container.querySelector('#gob-stage-wrap');
+      const phaseEl = container.querySelector('#gob-phase');
+      const announceEl = container.querySelector('#gob-announce');
+      const resultEl = container.querySelector('#gob-result');
+      const resTitleEl = container.querySelector('#gob-res-title');
+      const resSubEl = container.querySelector('#gob-res-sub');
+      const dockEl = container.querySelector('#gob-dock');
+
+      function nameOf(player) {
+        if (bridge.isConnected()) return player === myPlayer ? 'あなた' : '相手';
+        if (vsCpu) return player === P1 ? 'あなた' : 'CPU';
+        return COLOR_NAMES[player];
       }
 
-      const stageEl = container.querySelector('#gob3d-stage');
-      const turnBadgeEl = container.querySelector('#gob3d-turn-badge');
-      const hintEl = container.querySelector('#gob3d-hint');
-      const modeBtn = container.querySelector('#gob3d-mode-btn');
-      const camAngleBtn = container.querySelector('#gob3d-cam-angle-btn');
-      const restartTopBtn = container.querySelector('#gob3d-restart-top-btn');
-      const resultOverlayEl = container.querySelector('#gob3d-result-overlay');
-      const resTextEl = container.querySelector('#gob3d-res-text');
-      const resSubEl = container.querySelector('#gob3d-res-sub');
-      const restartBtn = container.querySelector('#gob3d-restart-btn');
-      const p1HandEl = container.querySelector('#gob3d-p1-hand');
-      const p2HandEl = container.querySelector('#gob3d-p2-hand');
-      const p2LabelEl = container.querySelector('#gob3d-p2-label');
-      const selectedBannerEl = container.querySelector('#gob3d-selected-banner');
-
-      // Three.js オブジェクト参照
-      let THREE = null;
-      let scene = null;
-      let camera = null;
-      let renderer = null;
-      let raycaster = null;
-      let mouse = null;
-
-      // カメラ極座標 (ドラッグ回転 & 視点プリセット)
-      let camTheta = 0;
-      let camPhi = 0.82; // 斜め見下ろし
-      let camRadius = 11.2;
-      let targetCamTheta = 0;
-      let targetCamPhi = 0.82;
-      let targetCamRadius = 11.2;
-      let topDownMode = false;
-
-      // 3Dメッシュ辞書
-      // pieceMeshes: Map<pieceId, THREE.Group>
-      const pieceMeshes = new Map();
-      // pieceAnimState: Map<pieceId, { startPos, targetPos, arcHeight, startTime, duration }>
-      const pieceAnims = new Map();
-      // 3×3 セルヒットターゲット & ハイライトリング
-      const cellTargets = []; // { r, c, mesh, ringMesh }
-      let ghostMesh = null;
-
-      // セル座標変換 (3×3 マス、間隔 2.15)
-      const CELL_SPACING = 2.15;
-      function cellToWorld(r, c) {
-        return {
-          x: (c - 1) * CELL_SPACING,
-          z: (r - 1) * CELL_SPACING
-        };
+      function isHumanTurn() {
+        if (isGameOver) return false;
+        const isConnected = bridge.isConnected();
+        return (!isConnected && !vsCpu) || (vsCpu && currentTurn === P1) || (isConnected && currentTurn === myPlayer);
       }
 
-      // ベンチ待機スロット座標 (P1は手前側/左側、P2は奥側/右側)
-      // スロット 0..5: [L, L, M, M, S, S]
-      function benchSlotToWorld(player, slotIdx) {
-        const xSide = player === P1 ? -4.55 : 4.55;
-        const colOffset = (slotIdx % 2 === 0) ? -0.68 : 0.68;
-        const rowGroup = Math.floor(slotIdx / 2); // 0: L, 1: M, 2: S
-        const zPos = (rowGroup - 1) * 2.05;
-        return {
-          x: xSide + colOffset,
-          z: zPos
-        };
+      function activePlayer() {
+        return bridge.isConnected() ? myPlayer : currentTurn;
       }
 
-      // 3Dゴブラーキャラクター生成 (中空ドーム＋目玉＋サイズ別トサカ)
-      function createGobblerMesh(pieceObj) {
-        const group = new THREE.Group();
-        const cfg = SIZES[pieceObj.size];
-        const isP1 = pieceObj.player === P1;
-
-        const mainColor = isP1 ? 0xf97316 : 0x0ea5e9;
-        const rimColor = isP1 ? 0xfdba74 : 0x7dd3fc;
-        const crestColor = isP1 ? 0xfacc15 : 0x38bdf8;
-
-        const bodyMat = new THREE.MeshStandardMaterial({
-          color: mainColor,
-          roughness: 0.28,
-          metalness: 0.12
-        });
-        const rimMat = new THREE.MeshStandardMaterial({
-          color: rimColor,
-          roughness: 0.35,
-          metalness: 0.15
-        });
-
-        // 1. 胴体シリンダー (下が少し広がるベル型)
-        const cylH = cfg.height * 0.62;
-        const cylGeo = new THREE.CylinderGeometry(cfg.radius * 0.88, cfg.radius, cylH, 32);
-        const cylMesh = new THREE.Mesh(cylGeo, bodyMat);
-        cylMesh.position.y = cylH / 2 + 0.06;
-        cylMesh.castShadow = true;
-        cylMesh.receiveShadow = true;
-        group.add(cylMesh);
-
-        // 2. 下端のスカートリム（被せる口の部分）
-        const torusGeo = new THREE.TorusGeometry(cfg.radius * 0.96, 0.065, 14, 32);
-        const torusMesh = new THREE.Mesh(torusGeo, rimMat);
-        torusMesh.rotation.x = Math.PI / 2;
-        torusMesh.position.y = 0.065;
-        torusMesh.castShadow = true;
-        group.add(torusMesh);
-
-        // 3. 頭頂ドーム
-        const domeGeo = new THREE.SphereGeometry(cfg.radius * 0.88, 32, 20, 0, Math.PI * 2, 0, Math.PI * 0.55);
-        const domeMesh = new THREE.Mesh(domeGeo, bodyMat);
-        domeMesh.position.y = cylH + 0.04;
-        domeMesh.castShadow = true;
-        domeMesh.receiveShadow = true;
-        group.add(domeMesh);
-
-        // 4. ギョロ目玉 (白目＋黒目＋ハイライト)
-        const eyeWhiteMat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.15 });
-        const pupilMat = new THREE.MeshStandardMaterial({ color: 0x0f172a, roughness: 0.1 });
-        const eyeRadius = cfg.radius * 0.23;
-        const eyeY = cylH + cfg.radius * 0.22;
-        const eyeZ = cfg.radius * 0.78;
-        const eyeXSpread = cfg.radius * 0.34;
-
-        [-1, 1].forEach((side) => {
-          const eyeGroup = new THREE.Group();
-          const whiteGeo = new THREE.SphereGeometry(eyeRadius, 18, 18);
-          const whiteMesh = new THREE.Mesh(whiteGeo, eyeWhiteMat);
-          eyeGroup.add(whiteMesh);
-
-          const pupilGeo = new THREE.SphereGeometry(eyeRadius * 0.52, 14, 14);
-          const pupilMesh = new THREE.Mesh(pupilGeo, pupilMat);
-          pupilMesh.position.set(0, 0.02, eyeRadius * 0.72);
-          eyeGroup.add(pupilMesh);
-
-          eyeGroup.position.set(side * eyeXSpread, eyeY, eyeZ);
-          group.add(eyeGroup);
-        });
-
-        // 5. かわいい口 / くちばし風スマイルライン
-        const smileGeo = new THREE.TorusGeometry(cfg.radius * 0.22, 0.032, 10, 20, Math.PI);
-        const smileMat = new THREE.MeshBasicMaterial({ color: 0x1e293b });
-        const smileMesh = new THREE.Mesh(smileGeo, smileMat);
-        smileMesh.rotation.x = Math.PI;
-        smileMesh.position.set(0, cylH * 0.65, cfg.radius * 0.91);
-        group.add(smileMesh);
-
-        // 6. サイズ別の頭頂トサカ / 王冠突起 (S=1本、M=2本、L=3本クラウン)
-        const crestMat = new THREE.MeshStandardMaterial({
-          color: crestColor,
-          roughness: 0.25,
-          metalness: 0.25
-        });
-        const topY = cylH + cfg.radius * 0.85;
-        const spikes = pieceObj.size;
-        for (let i = 0; i < spikes; i++) {
-          const offset = (i - (spikes - 1) / 2) * (cfg.radius * 0.28);
-          const coneGeo = new THREE.ConeGeometry(cfg.radius * 0.14, cfg.radius * 0.36, 14);
-          const coneMesh = new THREE.Mesh(coneGeo, crestMat);
-          coneMesh.position.set(offset, topY + 0.05, 0);
-          coneMesh.rotation.z = -offset * 0.5;
-          coneMesh.castShadow = true;
-          group.add(coneMesh);
-        }
-
-        // P1のコマは中央（または手前）を向き、P2のコマも正面を見やすく調整
-        group.rotation.y = isP1 ? 0.22 : -0.22;
-
-        // レイキャスト逆引き用に userData をすべての子メッシュに設定
-        group.userData = { pieceId: pieceObj.id };
-        group.traverse((child) => {
-          if (child.isMesh) {
-            child.userData = { pieceId: pieceObj.id };
-          }
-        });
-
-        return group;
-      }
-
-      // 3Dシーン構築
-      function setupThreeScene() {
-        scene = new THREE.Scene();
-
-        const w = stageEl.clientWidth || 960;
-        const h = stageEl.clientHeight || 560;
-        camera = new THREE.PerspectiveCamera(42, w / h, 0.1, 100);
-
-        renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
-        renderer.setSize(w, h);
-        renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
-        renderer.shadowMap.enabled = true;
-        renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-        stageEl.appendChild(renderer.domElement);
-
-        raycaster = new THREE.Raycaster();
-        mouse = new THREE.Vector2();
-
-        // ライティング
-        const ambient = new THREE.AmbientLight(0xdbeafe, 0.72);
-        scene.add(ambient);
-
-        const mainLight = new THREE.DirectionalLight(0xfffbeb, 1.15);
-        mainLight.position.set(6, 14, 9);
-        mainLight.castShadow = true;
-        mainLight.shadow.mapSize.width = 2048;
-        mainLight.shadow.mapSize.height = 2048;
-        mainLight.shadow.camera.near = 2;
-        mainLight.shadow.camera.far = 30;
-        const d = 8.5;
-        mainLight.shadow.camera.left = -d;
-        mainLight.shadow.camera.right = d;
-        mainLight.shadow.camera.top = d;
-        mainLight.shadow.camera.bottom = -d;
-        scene.add(mainLight);
-
-        const rimLight = new THREE.DirectionalLight(0x38bdf8, 0.45);
-        rimLight.position.set(-8, 7, -7);
-        scene.add(rimLight);
-
-        // テーブルステージ床
-        const tableGeo = new THREE.CylinderGeometry(7.6, 8.0, 0.45, 64);
-        const tableMat = new THREE.MeshStandardMaterial({
-          color: 0x131c2e,
-          roughness: 0.65,
-          metalness: 0.2
-        });
-        const tableMesh = new THREE.Mesh(tableGeo, tableMat);
-        tableMesh.position.y = -0.23;
-        tableMesh.receiveShadow = true;
-        scene.add(tableMesh);
-
-        // テーブル外周のゴールドリング
-        const outerRingGeo = new THREE.TorusGeometry(7.65, 0.08, 16, 64);
-        const outerRingMat = new THREE.MeshStandardMaterial({
-          color: 0x334155,
-          roughness: 0.3,
-          metalness: 0.6
-        });
-        const outerRing = new THREE.Mesh(outerRingGeo, outerRingMat);
-        outerRing.rotation.x = Math.PI / 2;
-        outerRing.position.y = 0.01;
-        scene.add(outerRing);
-
-        // 中央 3×3 プレイマット
-        const matGeo = new THREE.BoxGeometry(6.8, 0.08, 6.8);
-        const matMat = new THREE.MeshStandardMaterial({
-          color: 0x1e293b,
-          roughness: 0.55,
-          metalness: 0.1
-        });
-        const matMesh = new THREE.Mesh(matGeo, matMat);
-        matMesh.position.y = 0.02;
-        matMesh.receiveShadow = true;
-        scene.add(matMesh);
-
-        // 実物ゴブレットゴブラーズ風の立体クロスバー（井桁グリッド棒 4本）
-        const barMat = new THREE.MeshStandardMaterial({
-          color: 0xfacc15,
-          roughness: 0.32,
-          metalness: 0.18
-        });
-        const barLength = 6.5;
-        const barHeight = 0.22;
-        const barWidth = 0.22;
-        const barOffsets = [-CELL_SPACING / 2, CELL_SPACING / 2];
-
-        barOffsets.forEach((offset) => {
-          // 横バー
-          const hBarGeo = new THREE.BoxGeometry(barLength, barHeight, barWidth);
-          const hBar = new THREE.Mesh(hBarGeo, barMat);
-          hBar.position.set(0, barHeight / 2 + 0.04, offset);
-          hBar.castShadow = true;
-          hBar.receiveShadow = true;
-          scene.add(hBar);
-
-          // 縦バー
-          const vBarGeo = new THREE.BoxGeometry(barWidth, barHeight, barLength);
-          const vBar = new THREE.Mesh(vBarGeo, barMat);
-          vBar.position.set(offset, barHeight / 2 + 0.04, 0);
-          vBar.castShadow = true;
-          vBar.receiveShadow = true;
-          scene.add(vBar);
-        });
-
-        // P1 / P2 の3D待機ベンチ台座
-        [P1, P2].forEach((p) => {
-          const benchX = p === P1 ? -4.55 : 4.55;
-          const benchColor = p === P1 ? 0x431407 : 0x082f49;
-          const borderColor = p === P1 ? 0xf97316 : 0x0ea5e9;
-
-          const baseGeo = new THREE.BoxGeometry(2.35, 0.14, 5.8);
-          const baseMat = new THREE.MeshStandardMaterial({ color: benchColor, roughness: 0.5 });
-          const baseMesh = new THREE.Mesh(baseGeo, baseMat);
-          baseMesh.position.set(benchX, 0.07, 0);
-          baseMesh.receiveShadow = true;
-          scene.add(baseMesh);
-
-          // 各スロットの丸台座
-          for (let s = 0; s < 6; s++) {
-            const pos = benchSlotToWorld(p, s);
-            const padGeo = new THREE.CylinderGeometry(0.55, 0.58, 0.06, 24);
-            const padMat = new THREE.MeshStandardMaterial({ color: borderColor, roughness: 0.4, transparent: true, opacity: 0.35 });
-            const padMesh = new THREE.Mesh(padGeo, padMat);
-            padMesh.position.set(pos.x, 0.15, pos.z);
-            scene.add(padMesh);
-          }
-        });
-
-        // 3×3 セルのクリック判定タイル ＆ ターゲットハイライトリング
-        cellTargets.length = 0;
-        for (let r = 0; r < 3; r++) {
-          for (let c = 0; c < 3; c++) {
-            const pos = cellToWorld(r, c);
-
-            // セル床タイル
-            const tileGeo = new THREE.BoxGeometry(1.88, 0.06, 1.88);
-            const tileMat = new THREE.MeshStandardMaterial({
-              color: (r + c) % 2 === 0 ? 0x26354d : 0x1e2b40,
-              roughness: 0.6
-            });
-            const tileMesh = new THREE.Mesh(tileGeo, tileMat);
-            tileMesh.position.set(pos.x, 0.06, pos.z);
-            tileMesh.receiveShadow = true;
-            tileMesh.userData = { isCell: true, r, c };
-            scene.add(tileMesh);
-
-            // ターゲットリング (有効な移動先・勝利ライン表示用)
-            const ringGeo = new THREE.RingGeometry(0.68, 0.86, 32);
-            const ringMat = new THREE.MeshBasicMaterial({
-              color: 0x4ade80,
-              side: THREE.DoubleSide,
-              transparent: true,
-              opacity: 0.0
-            });
-            const ringMesh = new THREE.Mesh(ringGeo, ringMat);
-            ringMesh.rotation.x = -Math.PI / 2;
-            ringMesh.position.set(pos.x, 0.11, pos.z);
-            scene.add(ringMesh);
-
-            cellTargets.push({ r, c, mesh: tileMesh, ringMesh });
-          }
-        }
-
-        // ホバー時の半透明ゴーストプレビュー
-        const ghostGeo = new THREE.CylinderGeometry(0.5, 0.65, 1.0, 24);
-        const ghostMat = new THREE.MeshBasicMaterial({
-          color: 0x4ade80,
-          transparent: true,
-          opacity: 0.32,
-          wireframe: false
-        });
-        ghostMesh = new THREE.Mesh(ghostGeo, ghostMat);
-        ghostMesh.visible = false;
-        scene.add(ghostMesh);
-      }
-
-      // 全12体のコマを初期化して3D空間に配置
+      // ====================================================
+      // 1. ゲームの進行
+      // ====================================================
       function initGame() {
+        if (cpuTimer) clearTimeout(cpuTimer);
         board = [
           [[], [], []],
           [[], [], []],
           [[], [], []]
         ];
         selectedPiece = null;
-        hoveredCell = null;
         currentTurn = P1;
         isGameOver = false;
         winningLineCoords = null;
         winnerPlayer = null;
-        resultOverlayEl.classList.add('hidden');
-
-        // 既存3Dコマを削除
-        pieceMeshes.forEach((mesh) => {
-          if (scene) scene.remove(mesh);
-        });
-        pieceMeshes.clear();
-        pieceAnims.clear();
-
+        resultEl.classList.add('hidden');
         benchPieces = { [P1]: [], [P2]: [] };
-        const sizeOrder = [3, 3, 2, 2, 1, 1];
-
         [P1, P2].forEach((player) => {
-          sizeOrder.forEach((size, slotIdx) => {
-            const pieceObj = {
-              id: `p${player}_s${size}_${slotIdx}`,
-              player,
-              size,
-              benchSlot: slotIdx,
-              inBench: true
-            };
-            benchPieces[player].push(pieceObj);
-
-            if (THREE && scene) {
-              const mesh = createGobblerMesh(pieceObj);
-              const pos = benchSlotToWorld(player, slotIdx);
-              mesh.position.set(pos.x, 0.16, pos.z);
-              scene.add(mesh);
-              pieceMeshes.set(pieceObj.id, mesh);
-            }
+          [3, 3, 2, 2, 1, 1].forEach((size, slotIdx) => {
+            benchPieces[player].push({ id: `p${player}_s${size}_${slotIdx}`, player, size, benchSlot: slotIdx, inBench: true });
           });
         });
-
-        updateUIAnd3DTargets();
+        gameSerial++;
+        renderAll();
       }
 
-      // コマの目標座標アニメーション登録
-      function animatePieceTo(pieceId, targetX, targetY, targetZ, arcHeight = 1.6, duration = 340) {
-        const mesh = pieceMeshes.get(pieceId);
-        if (!mesh) return;
-        pieceAnims.set(pieceId, {
-          startPos: { x: mesh.position.x, y: mesh.position.y, z: mesh.position.z },
-          targetPos: { x: targetX, y: targetY, z: targetZ },
-          arcHeight,
-          startTime: performance.now(),
-          duration
-        });
-      }
-
-      // 全てのコマの位置を現在の盤面・選択状態に同期
-      function syncAllPiecePositions(animatedPieceId = null, customArc = 1.8) {
-        // 1. ベンチにあるコマ
-        [P1, P2].forEach((player) => {
-          benchPieces[player].forEach((p) => {
-            if (!p.inBench) return;
-            const pos = benchSlotToWorld(player, p.benchSlot);
-            const isSelected = selectedPiece && selectedPiece.pieceId === p.id;
-            const targetY = isSelected ? SIZES[p.size].liftY : 0.16;
-            animatePieceTo(p.id, pos.x, targetY, pos.z, isSelected ? 0.6 : 0.3, 220);
-          });
-        });
-
-        // 2. 盤上にあるコマ（スタック内のすべてのコマがそのマスに実在し、一番上の選択中コマだけ浮き上がる！）
-        for (let r = 0; r < 3; r++) {
-          for (let c = 0; c < 3; c++) {
-            const stack = board[r][c];
-            const pos = cellToWorld(r, c);
-            stack.forEach((p, idx) => {
-              const isTop = idx === stack.length - 1;
-              const isSelected = isTop && selectedPiece && selectedPiece.pieceId === p.id;
-              const targetY = isSelected ? SIZES[p.size].liftY : 0.09;
-              const dur = p.id === animatedPieceId ? 380 : 220;
-              const arc = p.id === animatedPieceId ? customArc : (isSelected ? 0.5 : 0.25);
-              animatePieceTo(p.id, pos.x, targetY, pos.z, arc, dur);
-            });
-          }
-        }
-      }
-
-      // 指定マスにサイズ size のコマを置けるか
       function canPlaceOnCell(r, c, size) {
         const stack = board[r][c];
         if (stack.length === 0) return true;
-        const top = stack[stack.length - 1];
-        return size > top.size;
+        return size > stack[stack.length - 1].size;
       }
 
-      // 勝敗判定 (相手の3連が同時に露出した場合は相手優先でチェック)
+      // 相手の列も同時に揃ったら相手の勝ち (動かして下のコマが現れた場合)
       function checkWinState(moverPlayer) {
         const opponent = moverPlayer === P1 ? P2 : P1;
         let moverWinLine = null;
         let oppWinLine = null;
-
         for (const line of WIN_LINES) {
           const [a, b, c] = line;
           const topA = board[a[0]][a[1]].at(-1);
           const topB = board[b[0]][b[1]].at(-1);
           const topC = board[c[0]][c[1]].at(-1);
-
           if (topA && topB && topC && topA.player === topB.player && topB.player === topC.player) {
             if (topA.player === opponent) oppWinLine = line;
             if (topA.player === moverPlayer) moverWinLine = line;
           }
         }
-
-        // 自分のコマを動かしたことで相手の3連が露出し、それを塞げなかった場合は相手の勝ち（公式ルール）
         if (oppWinLine) return { winner: opponent, line: oppWinLine };
         if (moverWinLine) return { winner: moverPlayer, line: moverWinLine };
         return null;
       }
 
-      // 手の実行
       function executeMove(moveData, isLocal = false) {
         if (isGameOver) return;
         const { from, to, player } = moveData;
@@ -864,13 +383,8 @@
         const targetWasOccupied = board[to.r][to.c].length > 0;
 
         if (from.type === 'hand') {
-          // ベンチから該当サイズの未使用コマを取得
-          if (from.pieceId) {
-            movingPiece = benchPieces[player].find(p => p.id === from.pieceId && p.inBench);
-          }
-          if (!movingPiece) {
-            movingPiece = benchPieces[player].find(p => p.size === from.size && p.inBench);
-          }
+          if (from.pieceId) movingPiece = benchPieces[player].find((p) => p.id === from.pieceId && p.inBench);
+          if (!movingPiece) movingPiece = benchPieces[player].find((p) => p.size === from.size && p.inBench);
           if (!movingPiece) return;
           movingPiece.inBench = false;
         } else if (from.type === 'board') {
@@ -878,16 +392,11 @@
           if (stack.length === 0) return;
           movingPiece = stack.pop();
         }
-
         if (!movingPiece) return;
         board[to.r][to.c].push(movingPiece);
 
-        // 効果音（上から被せた時はガブッ！、空きマスはコトン）
-        if (targetWasOccupied) {
-          sfx.gobble();
-        } else {
-          sfx.place();
-        }
+        if (targetWasOccupied) sfx.gobble();
+        else sfx.place();
 
         if (isLocal && bridge.isConnected()) {
           bridge.send({
@@ -902,47 +411,34 @@
         }
 
         selectedPiece = null;
-        hoveredCell = null;
-        syncAllPiecePositions(movingPiece.id, targetWasOccupied ? 2.45 : 1.75);
+        view.lastMoved = { id: movingPiece.id, gobble: targetWasOccupied };
 
         const winInfo = checkWinState(player);
         if (winInfo) {
           isGameOver = true;
           winnerPlayer = winInfo.winner;
           winningLineCoords = winInfo.line;
-
-          const isMyWin = (vsCpu && winnerPlayer === P1) || (!vsCpu && winnerPlayer === myPlayer);
-          if (isMyWin) sfx.win();
+          const localWinner = bridge.isConnected() ? myPlayer : (vsCpu ? P1 : null);
+          if (localWinner === null || winnerPlayer === localWinner) sfx.win();
           else sfx.lose();
 
-          const winnerLabel = winnerPlayer === P1
-            ? '🎉 オレンジ (あなた) の勝利！！'
-            : (vsCpu ? '💀 ブルー (CPU) の勝利！' : '🎉 ブルー の勝利！！');
-          resTextEl.textContent = winnerLabel;
-          resSubEl.textContent = targetWasOccupied
-            ? '鮮やかなゴブル（被せ）で3連を完成させました！'
-            : '見事3つのゴブラーが一列に揃いました！';
-
-          setTimeout(() => {
-            if (!isDestroyed && isGameOver) {
-              resultOverlayEl.classList.remove('hidden');
-            }
-          }, 650);
-
-          bridge.showToast(winnerLabel);
-          if (winnerPlayer === P1) bridge.recordWin();
+          resultSub = winnerPlayer !== player
+            ? `${nameOf(player)}がコマを動かしたことで、下にいた${nameOf(winnerPlayer)}のコマの列が現れました。`
+            : (targetWasOccupied ? 'かぶせて3つを一列に揃えました。' : '3つのコマが一列に揃いました。');
+          resTitleEl.textContent = nameOf(winnerPlayer) === 'あなた' ? 'あなたの勝ちです' : `${nameOf(winnerPlayer)}の勝ちです`;
+          resSubEl.textContent = resultSub;
+          cpuTimer = setTimeout(() => {
+            if (!isDestroyed && isGameOver) resultEl.classList.remove('hidden');
+          }, 900);
+          if (localWinner !== null && winnerPlayer === localWinner) bridge.recordWin();
         } else {
           currentTurn = currentTurn === P1 ? P2 : P1;
         }
 
-        updateUIAnd3DTargets();
-
-        if (vsCpu && currentTurn === P2 && !isGameOver) {
-          triggerCpuMove();
-        }
+        renderAll();
+        if (vsCpu && currentTurn === P2 && !isGameOver) triggerCpuMove();
       }
 
-      // 手持ちの残り個数集計
       function getHandCounts(player) {
         const counts = { 1: 0, 2: 0, 3: 0 };
         benchPieces[player].forEach((p) => {
@@ -951,163 +447,24 @@
         return counts;
       }
 
-      // UI ＆ 3Dリング表示の更新
-      function updateUIAnd3DTargets() {
-        const isConnected = bridge.isConnected();
-        const isHumanTurn = (!isConnected && !vsCpu) || (vsCpu && currentTurn === P1) || (isConnected && currentTurn === myPlayer);
-        const activePlayer = isConnected ? myPlayer : currentTurn;
-
-        p2LabelEl.textContent = `${vsCpu ? '🔵 CPU' : '🔵 相手'}の手持ち:`;
-
-        if (!isGameOver) {
-          if (currentTurn === P1) {
-            turnBadgeEl.textContent = '🟠 あなたの手番 (オレンジ)';
-            turnBadgeEl.style.color = '#fb923c';
-            turnBadgeEl.style.borderColor = 'rgba(249, 115, 22, 0.6)';
-          } else {
-            turnBadgeEl.textContent = vsCpu ? '🔵 CPUが思考中… (ブルー)' : '🔵 相手の手番 (ブルー)';
-            turnBadgeEl.style.color = '#38bdf8';
-            turnBadgeEl.style.borderColor = 'rgba(56, 189, 248, 0.6)';
-          }
-
-          if (isHumanTurn) {
-            if (selectedPiece) {
-              const srcLabel = selectedPiece.type === 'hand'
-                ? `手持ちの【${SIZES[selectedPiece.size].name}】`
-                : `盤面(${selectedPiece.r + 1},${selectedPiece.c + 1})の【${SIZES[selectedPiece.size].name}】`;
-              hintEl.textContent = `${srcLabel}を選択中 → 緑色に光るマスをクリックして配置！`;
-              selectedBannerEl.textContent = `✨ ${srcLabel} を選択中（小さなコマの上にガブッと被せられます）`;
-              selectedBannerEl.style.color = '#facc15';
-            } else {
-              hintEl.textContent = '3Dベンチまたは盤上の自分のコマをクリックして選択';
-              selectedBannerEl.textContent = '💡 3D空間のコマを直接クリック、または下のサイズボタンで選択（ドラッグで視点回転）';
-              selectedBannerEl.style.color = '#94a3b8';
-            }
-          } else {
-            hintEl.textContent = '相手のアクションを待っています…';
-            selectedBannerEl.textContent = '⏳ 相手の手番です…';
-            selectedBannerEl.style.color = '#94a3b8';
-          }
-        } else {
-          turnBadgeEl.textContent = winnerPlayer === P1 ? '🏆 オレンジの勝利！' : '🏆 ブルーの勝利！';
-          hintEl.textContent = '「もう一度遊ぶ」または右上のリセットで再戦できます';
-        }
-
-        // 下部クイック手持ちボタンの描画
-        renderQuickHandButtons(P1, p1HandEl, isHumanTurn && currentTurn === P1);
-        renderQuickHandButtons(P2, p2HandEl, !vsCpu && isHumanTurn && currentTurn === P2);
-
-        // 3D セルリングのハイライト更新
-        cellTargets.forEach((ct) => {
-          const { r, c, ringMesh } = ct;
-          if (isGameOver && winningLineCoords) {
-            const isWinCell = winningLineCoords.some(([wr, wc]) => wr === r && wc === c);
-            if (isWinCell) {
-              ringMesh.material.color.setHex(0xfacc15);
-              ringMesh.material.opacity = 0.9;
-              return;
-            }
-          }
-
-          if (isHumanTurn && selectedPiece) {
-            const isSource = selectedPiece.type === 'board' && selectedPiece.r === r && selectedPiece.c === c;
-            if (isSource) {
-              ringMesh.material.color.setHex(0xfacc15);
-              ringMesh.material.opacity = 0.85;
-            } else if (canPlaceOnCell(r, c, selectedPiece.size)) {
-              ringMesh.material.color.setHex(0x4ade80);
-              ringMesh.material.opacity = 0.65;
-            } else {
-              ringMesh.material.opacity = 0.0;
-            }
-          } else {
-            ringMesh.material.opacity = 0.0;
-          }
-        });
-
-        // ゴーストプレビュー更新
-        updateGhostPreview(isHumanTurn);
-      }
-
-      function renderQuickHandButtons(player, containerEl, canSelect) {
-        containerEl.innerHTML = '';
-        const counts = getHandCounts(player);
-        [3, 2, 1].forEach((size) => {
-          const btn = document.createElement('button');
-          btn.className = `gob3d-size-btn ${player === P1 ? 'p1' : 'p2'}`;
-          if (selectedPiece && selectedPiece.type === 'hand' && selectedPiece.player === player && selectedPiece.size === size) {
-            btn.classList.add('selected');
-          }
-          btn.disabled = !canSelect || counts[size] <= 0;
-          btn.innerHTML = `<span>${SIZES[size].name}</span> <span>×${counts[size]}</span>`;
-          btn.addEventListener('click', () => {
-            if (!canSelect || counts[size] <= 0) return;
-            const benchCandidate = benchPieces[player].find(p => p.inBench && p.size === size);
-            if (!benchCandidate) return;
-
-            if (selectedPiece && selectedPiece.type === 'hand' && selectedPiece.player === player && selectedPiece.size === size) {
-              selectedPiece = null;
-            } else {
-              selectedPiece = {
-                type: 'hand',
-                player,
-                size,
-                pieceId: benchCandidate.id
-              };
-              sfx.select();
-            }
-            syncAllPiecePositions();
-            updateUIAnd3DTargets();
-          });
-          containerEl.appendChild(btn);
-        });
-      }
-
-      function updateGhostPreview(isHumanTurn) {
-        if (!ghostMesh) return;
-        if (!isHumanTurn || !selectedPiece || !hoveredCell || isGameOver) {
-          ghostMesh.visible = false;
-          return;
-        }
-        const { r, c } = hoveredCell;
-        const isSource = selectedPiece.type === 'board' && selectedPiece.r === r && selectedPiece.c === c;
-        if (isSource || !canPlaceOnCell(r, c, selectedPiece.size)) {
-          ghostMesh.visible = false;
-          return;
-        }
-        const cfg = SIZES[selectedPiece.size];
-        const pos = cellToWorld(r, c);
-        ghostMesh.scale.set(cfg.radius * 1.45, cfg.height * 0.9, cfg.radius * 1.45);
-        ghostMesh.position.set(pos.x, cfg.height * 0.45 + 0.12, pos.z);
-        ghostMesh.visible = true;
-      }
-
-      // ==========================================
-      // 🧠 記憶＆先読み搭載 ゴブレットCPU AI
-      // ==========================================
+      // ====================================================
+      // 2. CPU (1手先まで読んで、相手にすぐ勝たれる手を避ける)
+      // ====================================================
       function getAllLegalMoves(player) {
         const moves = [];
         const handCounts = getHandCounts(player);
-
-        // 1. 手持ちからの配置（同じサイズは1つだけ代表として生成）
         [3, 2, 1].forEach((size) => {
           if (handCounts[size] > 0) {
-            const benchPiece = benchPieces[player].find(p => p.inBench && p.size === size);
+            const benchPiece = benchPieces[player].find((p) => p.inBench && p.size === size);
             for (let r = 0; r < 3; r++) {
               for (let c = 0; c < 3; c++) {
                 if (canPlaceOnCell(r, c, size)) {
-                  moves.push({
-                    from: { type: 'hand', size, pieceId: benchPiece ? benchPiece.id : null },
-                    to: { r, c },
-                    player
-                  });
+                  moves.push({ from: { type: 'hand', size, pieceId: benchPiece ? benchPiece.id : null }, to: { r, c }, player });
                 }
               }
             }
           }
         });
-
-        // 2. 盤上からの移動
         for (let r = 0; r < 3; r++) {
           for (let c = 0; c < 3; c++) {
             const top = board[r][c].at(-1);
@@ -1116,11 +473,7 @@
                 for (let tc = 0; tc < 3; tc++) {
                   if (r === tr && c === tc) continue;
                   if (canPlaceOnCell(tr, tc, top.size)) {
-                    moves.push({
-                      from: { type: 'board', r, c, size: top.size, pieceId: top.id },
-                      to: { r: tr, c: tc },
-                      player
-                    });
+                    moves.push({ from: { type: 'board', r, c, size: top.size, pieceId: top.id }, to: { r: tr, c: tc }, player });
                   }
                 }
               }
@@ -1134,8 +487,7 @@
         if (m.from.type === 'hand') {
           board[m.to.r][m.to.c].push({ id: 'temp', player: m.player, size: m.from.size });
         } else {
-          const piece = board[m.from.r][m.from.c].pop();
-          board[m.to.r][m.to.c].push(piece);
+          board[m.to.r][m.to.c].push(board[m.from.r][m.from.c].pop());
         }
       }
 
@@ -1143,12 +495,10 @@
         if (m.from.type === 'hand') {
           board[m.to.r][m.to.c].pop();
         } else {
-          const piece = board[m.to.r][m.to.c].pop();
-          board[m.from.r][m.from.c].push(piece);
+          board[m.from.r][m.from.c].push(board[m.to.r][m.to.c].pop());
         }
       }
 
-      // 盤面評価関数
       function evaluateBoardForCpu() {
         let score = 0;
         for (const line of WIN_LINES) {
@@ -1158,14 +508,13 @@
           let p1SizeSum = 0;
           for (const [r, c] of line) {
             const top = board[r][c].at(-1);
-            if (top) {
-              if (top.player === P2) {
-                p2Count++;
-                p2SizeSum += top.size;
-              } else {
-                p1Count++;
-                p1SizeSum += top.size;
-              }
+            if (!top) continue;
+            if (top.player === P2) {
+              p2Count++;
+              p2SizeSum += top.size;
+            } else {
+              p1Count++;
+              p1SizeSum += top.size;
             }
           }
           if (p2Count === 3) return 10000;
@@ -1175,23 +524,19 @@
           if (p2Count === 1 && p1Count === 0) score += 8 + p2SizeSum;
           if (p1Count === 1 && p2Count === 0) score -= 8 + p1SizeSum;
         }
-
-        // 中央マスの支配ボーナス
         const centerTop = board[1][1].at(-1);
-        if (centerTop) {
-          score += (centerTop.player === P2 ? 18 : -18) * centerTop.size;
-        }
+        if (centerTop) score += (centerTop.player === P2 ? 18 : -18) * centerTop.size;
         return score;
       }
 
       function triggerCpuMove() {
         if (isGameOver || isDestroyed) return;
-        setTimeout(() => {
+        cpuTimer = setTimeout(() => {
           if (isGameOver || currentTurn !== P2 || isDestroyed) return;
           const legalMoves = getAllLegalMoves(P2);
           if (legalMoves.length === 0) return;
 
-          // 1. 即座にCPUが勝てる手があれば実行
+          // 1. すぐ勝てる手
           for (const m of legalMoves) {
             applyTempMove(m);
             const w = checkWinState(P2);
@@ -1202,269 +547,541 @@
             }
           }
 
-          // 2. 各手をシミュレーションし、自滅手（動かした結果P1が勝つ、または次の1手でP1に即勝たれる手）を除外しつつ最高評価の手を選択
+          // 2. 自滅する手を除いて評価の高い手
           let bestMove = legalMoves[0];
           let bestScore = -Infinity;
-
           for (const m of legalMoves) {
             applyTempMove(m);
             const immediateCheck = checkWinState(P2);
             if (immediateCheck && immediateCheck.winner === P1) {
-              // 自分のコマを退かしたせいで下からP1の3連が露出した自滅手
               revertTempMove(m);
               continue;
             }
-
             let moveScore = evaluateBoardForCpu();
-
-            // 相手のコマに上から被せる手にはボーナス
-            if (board[m.to.r][m.to.c].length >= 2) {
-              const coveredPiece = board[m.to.r][m.to.c][board[m.to.r][m.to.c].length - 2];
-              if (coveredPiece.player === P1) {
-                moveScore += 22 + coveredPiece.size * 8;
-              }
+            const stack = board[m.to.r][m.to.c];
+            if (stack.length >= 2 && stack[stack.length - 2].player === P1) {
+              moveScore += 22 + stack[stack.length - 2].size * 8;
             }
-
             if (cpuHard) {
-              // 次のP1の手でP1が即勝利できる手があるか1手先読み
               const oppMoves = getAllLegalMoves(P1);
-              let oppCanWinImmediately = false;
               for (const om of oppMoves) {
                 applyTempMove(om);
                 const ow = checkWinState(P1);
                 revertTempMove(om);
                 if (ow && ow.winner === P1) {
-                  oppCanWinImmediately = true;
+                  moveScore -= 5000;
                   break;
                 }
-              }
-              if (oppCanWinImmediately) {
-                moveScore -= 5000;
               }
             } else {
               moveScore += (Math.random() - 0.5) * 35;
             }
-
             revertTempMove(m);
-
             if (moveScore > bestScore) {
               bestScore = moveScore;
               bestMove = m;
             }
           }
-
           executeMove(bestMove, false);
-        }, 520);
+        }, 700);
       }
 
-      // ==========================================
-      // 🖱️ 3D マウス・タッチ操作（カメラ回転 ＆ レイキャスト選択）
-      // ==========================================
-      let isPointerDown = false;
-      let pointerDownPos = { x: 0, y: 0 };
-      let isDraggingCamera = false;
-
-      function updateMouseNormalized(clientX, clientY) {
-        if (!renderer || !mouse) return;
-        const rect = renderer.domElement.getBoundingClientRect();
-        mouse.x = ((clientX - rect.left) / rect.width) * 2 - 1;
-        mouse.y = -((clientY - rect.top) / rect.height) * 2 + 1;
+      // ====================================================
+      // 3. 操作
+      // ====================================================
+      function findPiece(pieceId) {
+        for (const p of [P1, P2]) {
+          const b = benchPieces[p].find((x) => x.id === pieceId);
+          if (b && b.inBench) return { where: 'bench', piece: b };
+        }
+        for (let r = 0; r < 3; r++) {
+          for (let c = 0; c < 3; c++) {
+            const stack = board[r][c];
+            const i = stack.findIndex((x) => x.id === pieceId);
+            if (i >= 0) return { where: 'board', piece: stack[i], r, c, isTop: i === stack.length - 1 };
+          }
+        }
+        return null;
       }
 
-      function handleStageClick(clientX, clientY) {
-        if (isGameOver || !raycaster || !camera || !scene) return;
-        const isConnected = bridge.isConnected();
-        const isHumanTurn = (!isConnected && !vsCpu) || (vsCpu && currentTurn === P1) || (isConnected && currentTurn === myPlayer);
-        if (!isHumanTurn) return;
-        const activePlayer = isConnected ? myPlayer : currentTurn;
+      const isSource = (r, c) => selectedPiece && selectedPiece.type === 'board' && selectedPiece.r === r && selectedPiece.c === c;
 
-        updateMouseNormalized(clientX, clientY);
-        raycaster.setFromCamera(mouse, camera);
-
-        // 1. コマとの交差判定
-        const pieceMeshList = Array.from(pieceMeshes.values());
-        const pieceHits = raycaster.intersectObjects(pieceMeshList, true);
-
-        let clickedPieceId = null;
-        if (pieceHits.length > 0) {
-          clickedPieceId = pieceHits[0].object.userData.pieceId;
-        }
-
-        if (clickedPieceId) {
-          // そのコマがベンチにあるか盤上にあるか探す
-          for (const p of [P1, P2]) {
-            const benchP = benchPieces[p].find(item => item.id === clickedPieceId && item.inBench);
-            if (benchP) {
-              if (benchP.player === activePlayer) {
-                if (selectedPiece && selectedPiece.pieceId === benchP.id) {
-                  selectedPiece = null;
-                } else {
-                  selectedPiece = {
-                    type: 'hand',
-                    player: benchP.player,
-                    size: benchP.size,
-                    pieceId: benchP.id
-                  };
-                  sfx.select();
-                }
-                syncAllPiecePositions();
-                updateUIAnd3DTargets();
-              }
-              return;
-            }
-          }
-
-          // 盤上のコマだった場合：そのマス (r, c) を特定
-          for (let r = 0; r < 3; r++) {
-            for (let c = 0; c < 3; c++) {
-              const stack = board[r][c];
-              if (stack.some(item => item.id === clickedPieceId)) {
-                const top = stack[stack.length - 1];
-                // 既にコマを選択中で、このマスの上から被せられるなら被せる！
-                if (selectedPiece && !(selectedPiece.type === 'board' && selectedPiece.r === r && selectedPiece.c === c)) {
-                  if (canPlaceOnCell(r, c, selectedPiece.size)) {
-                    executeMove({
-                      from: selectedPiece,
-                      to: { r, c },
-                      player: activePlayer
-                    }, isConnected);
-                    return;
-                  }
-                }
-                // 自分のトップコマなら選択/解除
-                if (top && top.player === activePlayer) {
-                  if (selectedPiece && selectedPiece.pieceId === top.id) {
-                    selectedPiece = null;
-                  } else {
-                    selectedPiece = {
-                      type: 'board',
-                      r,
-                      c,
-                      player: top.player,
-                      size: top.size,
-                      pieceId: top.id
-                    };
-                    sfx.select();
-                  }
-                  syncAllPiecePositions();
-                  updateUIAnd3DTargets();
-                }
-                return;
-              }
-            }
-          }
-        }
-
-        // 2. マス目タイルとの交差判定
-        const tileMeshes = cellTargets.map(ct => ct.mesh);
-        const tileHits = raycaster.intersectObjects(tileMeshes, false);
-        if (tileHits.length > 0) {
-          const { r, c } = tileHits[0].object.userData;
-          if (selectedPiece && canPlaceOnCell(r, c, selectedPiece.size)) {
-            if (!(selectedPiece.type === 'board' && selectedPiece.r === r && selectedPiece.c === c)) {
-              executeMove({
-                from: selectedPiece,
-                to: { r, c },
-                player: activePlayer
-              }, isConnected);
-              return;
-            }
-          }
-          // コマ未選択時に自分のコマがあるマスをクリックした場合
-          const top = board[r][c].at(-1);
-          if (top && top.player === activePlayer) {
-            selectedPiece = {
-              type: 'board',
-              r,
-              c,
-              player: top.player,
-              size: top.size,
-              pieceId: top.id
-            };
-            sfx.select();
-            syncAllPiecePositions();
-            updateUIAnd3DTargets();
-          }
-        }
+      function canDropOn(r, c) {
+        return !!selectedPiece && !isSource(r, c) && canPlaceOnCell(r, c, selectedPiece.size);
       }
 
-      function handleStageHover(clientX, clientY) {
-        if (!raycaster || !camera || !scene || isGameOver) return;
-        updateMouseNormalized(clientX, clientY);
-        raycaster.setFromCamera(mouse, camera);
+      function cellClickable(r, c) {
+        if (!isHumanTurn()) return false;
+        const top = board[r][c].at(-1);
+        return canDropOn(r, c) || (!!top && top.player === activePlayer());
+      }
 
-        const tileMeshes = cellTargets.map(ct => ct.mesh);
-        const tileHits = raycaster.intersectObjects(tileMeshes, false);
-        if (tileHits.length > 0) {
-          const { r, c } = tileHits[0].object.userData;
-          hoveredCell = { r, c };
+      function pieceClickable(pieceId) {
+        if (!isHumanTurn()) return false;
+        const f = findPiece(pieceId);
+        if (!f) return false;
+        if (f.where === 'bench') return f.piece.player === activePlayer();
+        return cellClickable(f.r, f.c);
+      }
+
+      function selectHand(player, size, pieceId) {
+        if (selectedPiece && selectedPiece.type === 'hand' && selectedPiece.pieceId === pieceId) {
+          selectedPiece = null;
         } else {
-          hoveredCell = null;
+          selectedPiece = { type: 'hand', player, size, pieceId };
+          sfx.select();
         }
-        const isConnected = bridge.isConnected();
-        const isHumanTurn = (!isConnected && !vsCpu) || (vsCpu && currentTurn === P1) || (isConnected && currentTurn === myPlayer);
-        updateGhostPreview(isHumanTurn);
+        renderAll();
       }
 
-      // ボタンイベント
-      modeBtn.addEventListener('click', () => {
-        if (bridge.isConnected()) {
-          bridge.showToast('オンライン対戦中はモードを変更できません');
+      function handleCell(r, c) {
+        if (!isHumanTurn()) return;
+        if (canDropOn(r, c)) {
+          executeMove({ from: selectedPiece, to: { r, c }, player: activePlayer() }, bridge.isConnected());
           return;
         }
-        if (vsCpu && cpuHard) {
-          cpuHard = false;
-          modeBtn.textContent = '🤖 CPU対戦 (普通)';
-          bridge.showToast('🤖 CPU難易度：ふつう に切り替えました');
-        } else if (vsCpu && !cpuHard) {
-          vsCpu = false;
-          modeBtn.textContent = '👥 2人対戦 (ローカル)';
-          bridge.showToast('👥 ローカル2人対戦モードに切り替えました');
-        } else {
-          vsCpu = true;
-          cpuHard = true;
-          modeBtn.textContent = '🤖 CPU対戦 (強)';
-          bridge.showToast('🤖 CPU対戦モード (強AI) に切り替えました');
+        const top = board[r][c].at(-1);
+        if (top && top.player === activePlayer()) {
+          if (selectedPiece && selectedPiece.pieceId === top.id) {
+            selectedPiece = null;
+          } else {
+            selectedPiece = { type: 'board', r, c, player: top.player, size: top.size, pieceId: top.id };
+            sfx.select();
+          }
+          renderAll();
         }
-        updateUIAnd3DTargets();
-        if (vsCpu && currentTurn === P2 && !isGameOver) {
-          triggerCpuMove();
-        }
-      });
+      }
 
-      camAngleBtn.addEventListener('click', () => {
-        topDownMode = !topDownMode;
-        if (topDownMode) {
-          targetCamTheta = 0;
-          targetCamPhi = 0.22; // 真上近い視点（隠れたコマや並びが見やすい）
-          targetCamRadius = 10.6;
-          camAngleBtn.textContent = '🎥 斜め3D視点へ';
-        } else {
-          targetCamTheta = 0;
-          targetCamPhi = 0.82;
-          targetCamRadius = 11.2;
-          camAngleBtn.textContent = '🎥 視点切替';
+      function handlePiece(pieceId) {
+        if (!isHumanTurn()) return;
+        const f = findPiece(pieceId);
+        if (!f) return;
+        if (f.where === 'bench') {
+          if (f.piece.player === activePlayer()) selectHand(f.piece.player, f.piece.size, f.piece.id);
+          return;
         }
-      });
+        handleCell(f.r, f.c);
+      }
+
+      // ====================================================
+      // 4. 3D の卓
+      // ====================================================
+      const B3D = window.BoardArena3D;
+      const STEP = 2.0;
+      const BENCH_Z = 4.2;
+
+      let THREE = null;
+      let st = null;
+      let picker = null;
+      const view = {
+        gameKey: -1,
+        objs: new Map(), // piece id -> obj
+        marks: null,
+        winMarks: null,
+        hoverMark: null,
+        ghost: null,
+        lastMoved: null,
+        glow: null
+      };
+
+      const cellPos = (r, c) => ({ x: (c - 1) * STEP, z: (r - 1) * STEP });
+
+      // 手持ちの並び (大・大・中・中・小・小)
+      const benchX = (() => {
+        const radii = [3, 3, 2, 2, 1, 1].map((s) => SIZES[s].radius);
+        const xs = [0];
+        for (let i = 1; i < radii.length; i++) xs.push(xs[i - 1] + radii[i - 1] + radii[i] + 0.14);
+        const mid = (xs[0] - radii[0] + xs[xs.length - 1] + radii[radii.length - 1]) / 2;
+        return xs.map((x) => x - mid);
+      })();
+
+      function benchPos(player, slot) {
+        const near = player === myPlayerSide();
+        return { x: near ? benchX[slot] : -benchX[slot], z: near ? BENCH_Z : -BENCH_Z };
+      }
+
+      // 手前に来る側 (オンラインのゲストは青が手前)
+      function myPlayerSide() {
+        return bridge.isConnected() ? myPlayer : P1;
+      }
+
+      function bodyGeo(size) {
+        return st.geo.cached(`gob-body:${size}`, () => {
+          const { radius: R, height: H } = SIZES[size];
+          const prof = [[0, 0], [0.95, 0], [1, 0.025], [1, 0.09], [0.94, 0.15], [0.9, 0.3], [0.88, 0.6], [0.84, 0.75], [0.72, 0.87], [0.5, 0.955], [0.26, 0.993], [0, 1]];
+          return st.geo.lathe(prof.map(([r, y]) => [r * R, y * H]), 56);
+        });
+      }
+
+      const bodyMat = (player) => st.kit.cached(`gob-body:${player}`, () => new THREE.MeshPhysicalMaterial({
+        color: st.kit.color(COLORS[player]),
+        roughness: 0.46,
+        metalness: 0,
+        clearcoat: 0.3,
+        clearcoatRoughness: 0.4,
+        envMapIntensity: 0.75
+      }));
+
+      function makePiece(piece) {
+        const { radius: R, height: H } = SIZES[piece.size];
+        const obj = new THREE.Group();
+        const bob = new THREE.Group();
+        obj.add(bob);
+
+        const body = new THREE.Mesh(bodyGeo(piece.size), bodyMat(piece.player));
+        body.castShadow = true;
+        body.receiveShadow = true;
+        bob.add(body);
+
+        // 帽子のつまみ
+        const knob = new THREE.Mesh(st.geo.cached('gob-sphere', () => new THREE.SphereGeometry(1, 24, 16)), bodyMat(piece.player));
+        knob.scale.setScalar(R * 0.15);
+        knob.position.y = H * 0.99 + R * 0.08;
+        knob.castShadow = true;
+        bob.add(knob);
+
+        // 大きな目 (正面 = +z)
+        [-1, 1].forEach((s) => {
+          const eye = new THREE.Mesh(st.geo.cached('gob-sphere', () => new THREE.SphereGeometry(1, 24, 16)), st.kit.lacquer('#f3efe6', { roughness: 0.25 }));
+          eye.scale.setScalar(R * 0.21);
+          eye.position.set(s * R * 0.31, H * 0.7, R * 0.72);
+          const pupil = new THREE.Mesh(st.geo.cached('gob-sphere', () => new THREE.SphereGeometry(1, 24, 16)), st.kit.lacquer('#151312', { roughness: 0.15 }));
+          pupil.scale.setScalar(R * 0.1);
+          pupil.position.set(s * R * 0.3, H * 0.7, R * 0.88);
+          bob.add(eye, pupil);
+        });
+
+        const shadow = st.markers.contact(R * 2.5, R * 2.5, 0.5);
+        shadow.position.y = 0.003;
+        obj.add(shadow);
+
+        // 向きは少しずつばらつかせる (どれもこちら側を向く)
+        const rng = B3D.mulberry32(piece.id.length * 97 + piece.size * 13 + piece.benchSlot * 7 + piece.player);
+        obj.userData = { id: piece.id, bob, shadow };
+        obj.rotation.y = (rng() - 0.5) * 0.5;
+        st.root.add(obj);
+
+        st.pick(obj, {
+          enabled: () => !!findPiece(piece.id) && resultEl.classList.contains('hidden'),
+          clickable: () => pieceClickable(piece.id),
+          onHover: () => {
+            const f = findPiece(piece.id);
+            if (f && f.where === 'board') showHover(f.r, f.c);
+          },
+          onLeave: hideHover,
+          onClick: () => handlePiece(piece.id)
+        });
+        return obj;
+      }
+
+      function buildTable() {
+        // 木の格子 (#)
+        const barMat = st.kit.wood('cherry', { repeat: 0.3, clearcoat: 0.45, vertical: false });
+        const len = STEP * 3 + 0.3;
+        [-1, 1].forEach((s) => {
+          const a = new THREE.Mesh(st.geo.cached('gob-bar', () => st.geo.roundedBox(len, 0.18, 0.3, 0.08, 3)), barMat);
+          a.position.set(0, 0.09, s * STEP / 2);
+          const b = new THREE.Mesh(st.geo.cached('gob-bar', () => st.geo.roundedBox(len, 0.18, 0.3, 0.08, 3)), barMat);
+          b.rotation.y = Math.PI / 2;
+          b.position.set(s * STEP / 2, 0.095, 0);
+          [a, b].forEach((m) => {
+            m.castShadow = true;
+            m.receiveShadow = true;
+            st.root.add(m);
+          });
+        });
+
+        view.marks = new THREE.Group();
+        view.winMarks = new THREE.Group();
+        st.root.add(view.winMarks, view.marks);
+
+        view.hoverMark = st.markers.square(STEP * 0.9, '#f4ede1', 0.1);
+        view.hoverMark.position.y = 0.004;
+        view.hoverMark.visible = false;
+        st.root.add(view.hoverMark);
+
+        picker = st.gridPicker({
+          rows: 3,
+          cols: 3,
+          step: STEP,
+          y: 0.01,
+          enabled: () => resultEl.classList.contains('hidden'),
+          clickable: cellClickable,
+          onHover: showHover,
+          onLeave: hideHover,
+          onClick: handleCell
+        });
+      }
+
+      function showHover(r, c) {
+        if (!cellClickable(r, c)) {
+          hideHover();
+          return;
+        }
+        const p = cellPos(r, c);
+        view.hoverMark.position.set(p.x, 0.004, p.z);
+        view.hoverMark.visible = true;
+        // 置けるマスには半透明の姿を見せる
+        if (canDropOn(r, c)) {
+          if (!view.ghost || view.ghost.userData.key !== `${selectedPiece.player}:${selectedPiece.size}`) {
+            if (view.ghost) st.removeObject(view.ghost);
+            view.ghost = new THREE.Mesh(bodyGeo(selectedPiece.size), st.kit.ghostSolid(COLORS[selectedPiece.player], 0.32));
+            view.ghost.userData.key = `${selectedPiece.player}:${selectedPiece.size}`;
+            view.ghost.renderOrder = 4;
+            st.root.add(view.ghost);
+          }
+          view.ghost.position.set(p.x, 0.001, p.z);
+          view.ghost.visible = true;
+        } else if (view.ghost) {
+          view.ghost.visible = false;
+        }
+      }
+
+      function hideHover() {
+        view.hoverMark.visible = false;
+        if (view.ghost) view.ghost.visible = false;
+      }
+
+      // ---- 同期 ----
+      function resetPieces() {
+        view.gameKey = gameSerial;
+        view.objs.forEach((o) => st.removeObject(o));
+        view.objs.clear();
+        let i = 0;
+        [P1, P2].forEach((player) => {
+          benchPieces[player].forEach((piece) => {
+            const obj = makePiece(piece);
+            const p = benchPos(player, piece.benchSlot);
+            obj.position.set(p.x, 1.4, p.z);
+            obj.userData.home = { x: p.x, y: 0, z: p.z };
+            st.animate(obj, { position: { x: p.x, y: 0, z: p.z } }, { duration: 480, delay: 100 + i * 40, ease: 'outBounce' });
+            view.objs.set(piece.id, obj);
+            i++;
+          });
+        });
+      }
+
+      function syncPieces() {
+        const targets = new Map();
+        [P1, P2].forEach((player) => {
+          benchPieces[player].forEach((piece) => {
+            if (!piece.inBench) return;
+            const p = benchPos(player, piece.benchSlot);
+            targets.set(piece.id, { x: p.x, z: p.z, size: piece.size });
+          });
+        });
+        for (let r = 0; r < 3; r++) {
+          for (let c = 0; c < 3; c++) {
+            board[r][c].forEach((piece) => {
+              const p = cellPos(r, c);
+              targets.set(piece.id, { x: p.x, z: p.z, size: piece.size });
+            });
+          }
+        }
+
+        targets.forEach((t, id) => {
+          const obj = view.objs.get(id);
+          if (!obj) return;
+          const sel = selectedPiece && selectedPiece.pieceId === id;
+          const to = { x: t.x, y: sel ? SIZES[t.size].lift : 0, z: t.z };
+          const h = obj.userData.home;
+          if (h && Math.abs(h.x - to.x) < 1e-4 && Math.abs(h.y - to.y) < 1e-4 && Math.abs(h.z - to.z) < 1e-4) return;
+          const moved = view.lastMoved && view.lastMoved.id === id && (Math.abs(h.x - to.x) > 1e-4 || Math.abs(h.z - to.z) > 1e-4);
+          obj.userData.home = to;
+          if (moved) {
+            // 持ち上げた位置から弧を描いて、上からかぶせる
+            st.animate(obj, { position: to }, { duration: 520, arc: view.lastMoved.gobble ? 1.3 : 0.9, ease: 'inOutCubic' });
+          } else {
+            st.animate(obj, { position: to }, { duration: sel ? 300 : 260, ease: sel ? 'outBack' : 'outCubic' });
+          }
+        });
+      }
+
+      function syncMarks() {
+        st.clearGroup(view.marks);
+        st.clearGroup(view.winMarks);
+        if (isGameOver && winningLineCoords) {
+          winningLineCoords.forEach(([r, c]) => {
+            const m = st.markers.square(STEP * 0.92, '#e2b867', 0.2);
+            const p = cellPos(r, c);
+            m.position.set(p.x, 0.003, p.z);
+            view.winMarks.add(m);
+          });
+          return;
+        }
+        if (!isHumanTurn() || !selectedPiece) return;
+        for (let r = 0; r < 3; r++) {
+          for (let c = 0; c < 3; c++) {
+            const p = cellPos(r, c);
+            if (isSource(r, c)) {
+              const m = new THREE.Mesh(st.geo.cached('gob-sel-ring', () => new THREE.RingGeometry(STEP * 0.42, STEP * 0.46, 56).rotateX(-Math.PI / 2)), view.glow);
+              m.position.set(p.x, 0.006, p.z);
+              m.renderOrder = 3;
+              view.marks.add(m);
+            } else if (canDropOn(r, c)) {
+              const covered = board[r][c].length > 0;
+              const m = covered ? st.markers.ring(STEP * 0.42, STEP * 0.46, '#e2b867', 0.7) : st.markers.dot(0.16, '#f4ede1', 0.5);
+              m.position.set(p.x, 0.006, p.z);
+              view.marks.add(m);
+            }
+          }
+        }
+      }
+
+      function syncTable() {
+        if (!st) return;
+        if (view.gameKey !== gameSerial) resetPieces();
+        syncPieces();
+        syncMarks();
+        hideHover();
+        st.refreshHover();
+      }
+
+      function initStage(threeLib) {
+        THREE = threeLib;
+        st = B3D.createStage(THREE, stageWrapEl, {
+          embed: true,
+          radius: 15.5,
+          phi: 0.66,
+          lookY: 0.3,
+          extent: 6,
+          tableY: 0,
+          tableWood: 'oak',
+          minRadius: 7,
+          maxRadius: 24,
+          maxPhi: 1.2,
+          onFrame(now) {
+            if (view.glow) view.glow.opacity = 0.55 + 0.35 * (0.5 + 0.5 * Math.sin(now / 260));
+            const winners = isGameOver && winningLineCoords ? winningLineCoords.map(([r, c]) => board[r][c].at(-1)).filter(Boolean).map((p) => p.id) : [];
+            view.objs.forEach((obj, id) => {
+              const u = obj.userData;
+              let y = 0;
+              if (selectedPiece && selectedPiece.pieceId === id) y = Math.sin(now / 170) * 0.08;
+              const wi = winners.indexOf(id);
+              if (wi >= 0) y = Math.abs(Math.sin(now / 170 + wi * 0.6)) * 0.42;
+              u.bob.position.y += (y - u.bob.position.y) * 0.3;
+            });
+          }
+        });
+        view.glow = st.kit.cached('gob-glow', () => new THREE.MeshBasicMaterial({
+          color: st.kit.color('#e2b867'), transparent: true, opacity: 0.7, depthWrite: false, toneMapped: false
+        }));
+        buildTable();
+        B3D.current = st;
+        syncTable();
+      }
+
+      // ====================================================
+      // 5. 操作パネル
+      // ====================================================
+      function sizeButtons(player, canSelect) {
+        const counts = getHandCounts(player);
+        return [3, 2, 1].map((size) => {
+          const sel = selectedPiece && selectedPiece.type === 'hand' && selectedPiece.player === player && selectedPiece.size === size;
+          const d = 8 + size * 3;
+          return `<button class="gob-size ${sel ? 'is-selected' : ''}" data-size="${size}" ${canSelect && counts[size] > 0 ? '' : 'disabled'}>
+            <i style="--c:${COLORS[player]};width:${d}px;height:${d}px"></i>${SIZES[size].name}<small>${counts[size]}</small>
+          </button>`;
+        }).join('');
+      }
+
+      function renderAll() {
+        const isConnected = bridge.isConnected();
+        modeSelEl.disabled = isConnected;
+        modeSelEl.value = vsCpu ? (cpuHard ? 'cpu_hard' : 'cpu_normal') : 'local';
+
+        const order = myPlayerSide() === P1 ? [P1, P2] : [P2, P1];
+        playersRowEl.innerHTML = order.map((p) => {
+          const counts = getHandCounts(p);
+          const isTurn = currentTurn === p && !isGameOver;
+          return `
+            <div class="gob-player ${isTurn ? 'is-turn' : ''}">
+              <span class="gob-swatch" style="--c:${COLORS[p]}"></span>
+              <div>
+                <div class="gob-player-name">${nameOf(p)}</div>
+                <div class="gob-player-sub"><span>手持ち 大${counts[3]} · 中${counts[2]} · 小${counts[1]}</span></div>
+              </div>
+            </div>
+          `;
+        }).join('');
+
+        const human = isHumanTurn();
+        if (isGameOver) {
+          phaseEl.textContent = '決着';
+          announceEl.textContent = `${nameOf(winnerPlayer) === 'あなた' ? 'あなたの勝ちです' : `${nameOf(winnerPlayer)}の勝ちです`}。${resultSub}`;
+        } else {
+          phaseEl.textContent = `${nameOf(currentTurn)}の手番 · ${COLOR_NAMES[currentTurn]}`;
+          if (human && selectedPiece) {
+            const src = selectedPiece.type === 'hand' ? `手持ちの${SIZES[selectedPiece.size].name}` : `盤上の${SIZES[selectedPiece.size].name}`;
+            announceEl.textContent = `${src}を選んでいます。置けるマスに印が付いています。`;
+          } else if (human) {
+            announceEl.textContent = '手持ちか盤上の自分のコマを選んでください。大きいコマは小さいコマにかぶせられます。';
+          } else {
+            announceEl.textContent = vsCpu ? 'CPUが考えています。' : '相手の手を待っています。';
+          }
+        }
+
+        if (isGameOver) {
+          dockEl.innerHTML = `
+            <div class="gob-dock-info"><span class="gob-dock-label">決着</span><span class="gob-dock-text">${resultSub}</span></div>
+            <div class="gob-actions"><button class="gob-btn is-primary" id="gob-dock-again">もう一度遊ぶ</button></div>
+          `;
+          dockEl.querySelector('#gob-dock-again').onclick = triggerRestart;
+        } else if (human) {
+          const player = activePlayer();
+          dockEl.innerHTML = `
+            <div class="gob-dock-info">
+              <span class="gob-dock-label">${nameOf(player)}の手持ち</span>
+              <div class="gob-controls">${sizeButtons(player, true)}</div>
+            </div>
+            <div class="gob-actions">
+              ${selectedPiece ? '<button class="gob-btn" id="gob-cancel">選び直す</button>' : ''}
+            </div>
+          `;
+          dockEl.querySelectorAll('[data-size]').forEach((btn) => {
+            btn.onclick = () => {
+              const size = +btn.getAttribute('data-size');
+              const cand = benchPieces[player].find((p) => p.inBench && p.size === size);
+              if (cand) selectHand(player, size, cand.id);
+            };
+          });
+          const cancel = dockEl.querySelector('#gob-cancel');
+          if (cancel) {
+            cancel.onclick = () => {
+              selectedPiece = null;
+              renderAll();
+            };
+          }
+        } else {
+          dockEl.innerHTML = `<span class="gob-wait">${vsCpu ? 'CPUが考えています' : '相手の手を待っています'}</span>`;
+        }
+
+        syncTable();
+      }
 
       function triggerRestart() {
         initGame();
-        if (bridge.isConnected()) {
-          bridge.send({ game: 'gobblet', type: 'restart' });
-        }
-        bridge.showToast('新しいゲームを開始しました！');
+        if (bridge.isConnected()) bridge.send({ game: 'gobblet', type: 'restart' });
       }
 
-      restartBtn.addEventListener('click', triggerRestart);
-      restartTopBtn.addEventListener('click', triggerRestart);
+      modeSelEl.addEventListener('change', () => {
+        if (bridge.isConnected()) return;
+        const v = modeSelEl.value;
+        vsCpu = v !== 'local';
+        cpuHard = v === 'cpu_hard';
+        renderAll();
+        if (vsCpu && currentTurn === P2 && !isGameOver) triggerCpuMove();
+      });
+      newBtnEl.addEventListener('click', triggerRestart);
+      container.querySelector('#gob-res-again').addEventListener('click', triggerRestart);
+      container.querySelector('#gob-res-close').addEventListener('click', () => resultEl.classList.add('hidden'));
 
-      // P2P 連携
+      // P2P
       bridge.onPlayerJoined(() => {
         myPlayer = bridge.isHost ? P1 : P2;
         vsCpu = false;
-        modeBtn.textContent = '👥 オンライン対戦中';
         initGame();
-        bridge.showToast('対戦相手が合流しました！3Dゴブレット開始！');
+        bridge.showToast('対戦相手が着席しました');
       });
 
       bridge.onReceive((data) => {
@@ -1473,133 +1090,23 @@
           executeMove(data.move, false);
         } else if (data.type === 'restart') {
           initGame();
-          bridge.showToast('相手が再戦を開始しました！');
+          bridge.showToast('相手が新しいゲームを始めました');
         }
       });
 
-      // リサイズ対応
-      function onResize() {
-        if (isDestroyed || !renderer || !camera) return;
-        const w = stageEl.clientWidth || 960;
-        const h = stageEl.clientHeight || 560;
-        camera.aspect = w / h;
-        camera.updateProjectionMatrix();
-        renderer.setSize(w, h);
-      }
-      window.addEventListener('resize', onResize);
-
-      // Three.js ロード＆レンダリングループ開始
-      loadThreeJS().then((threeLib) => {
-        if (isDestroyed) return;
-        THREE = threeLib;
-        setupThreeScene();
-        initGame();
-
-        const domEl = renderer.domElement;
-
-        domEl.addEventListener('pointerdown', (e) => {
-          isPointerDown = true;
-          isDraggingCamera = false;
-          pointerDownPos = { x: e.clientX, y: e.clientY };
-        });
-
-        window.addEventListener('pointermove', (e) => {
-          if (isDestroyed) return;
-          if (isPointerDown) {
-            const dx = e.clientX - pointerDownPos.x;
-            const dy = e.clientY - pointerDownPos.y;
-            if (Math.hypot(dx, dy) > 6) {
-              isDraggingCamera = true;
-              targetCamTheta -= dx * 0.007;
-              targetCamPhi = Math.max(0.2, Math.min(1.28, targetCamPhi - dy * 0.006));
-              pointerDownPos = { x: e.clientX, y: e.clientY };
-            }
-          } else {
-            handleStageHover(e.clientX, e.clientY);
-          }
-        });
-
-        window.addEventListener('pointerup', (e) => {
-          if (!isPointerDown) return;
-          isPointerDown = false;
-          if (!isDraggingCamera && e.target === domEl) {
-            handleStageClick(e.clientX, e.clientY);
-          }
-        });
-
-        domEl.addEventListener('wheel', (e) => {
-          e.preventDefault();
-          targetCamRadius = Math.max(7.5, Math.min(15.5, targetCamRadius + e.deltaY * 0.005));
-        }, { passive: false });
-
-        // アニメーションループ
-        function animate(now) {
-          if (isDestroyed) return;
-          animFrameId = requestAnimationFrame(animate);
-
-          // カメラ補間
-          camTheta += (targetCamTheta - camTheta) * 0.12;
-          camPhi += (targetCamPhi - camPhi) * 0.12;
-          camRadius += (targetCamRadius - camRadius) * 0.12;
-
-          camera.position.x = camRadius * Math.sin(camPhi) * Math.sin(camTheta);
-          camera.position.y = camRadius * Math.cos(camPhi);
-          camera.position.z = camRadius * Math.sin(camPhi) * Math.cos(camTheta);
-          camera.lookAt(0, 0.35, 0);
-
-          // コマの放物線移動アニメーション補間
-          pieceAnims.forEach((anim, pieceId) => {
-            const mesh = pieceMeshes.get(pieceId);
-            if (!mesh) {
-              pieceAnims.delete(pieceId);
-              return;
-            }
-            const t = Math.min(1, (now - anim.startTime) / anim.duration);
-            const ease = 1 - Math.pow(1 - t, 3);
-            mesh.position.x = anim.startPos.x + (anim.targetPos.x - anim.startPos.x) * ease;
-            mesh.position.z = anim.startPos.z + (anim.targetPos.z - anim.startPos.z) * ease;
-            const baseY = anim.startPos.y + (anim.targetPos.y - anim.startPos.y) * ease;
-            const arcOffset = Math.sin(t * Math.PI) * anim.arcHeight;
-            mesh.position.y = baseY + arcOffset;
-
-            if (t >= 1) {
-              mesh.position.set(anim.targetPos.x, anim.targetPos.y, anim.targetPos.z);
-              pieceAnims.delete(pieceId);
-            }
-          });
-
-          // 選択中コマのふわふわ浮遊＆勝利時の喜びジャンプ演出
-          if (selectedPiece && !pieceAnims.has(selectedPiece.pieceId)) {
-            const selMesh = pieceMeshes.get(selectedPiece.pieceId);
-            if (selMesh) {
-              const baseLift = SIZES[selectedPiece.size].liftY;
-              selMesh.position.y = baseLift + Math.sin(now * 0.006) * 0.12;
-            }
-          }
-
-          if (isGameOver && winningLineCoords) {
-            winningLineCoords.forEach(([wr, wc], idx) => {
-              const top = board[wr][wc].at(-1);
-              if (top && !pieceAnims.has(top.id)) {
-                const winMesh = pieceMeshes.get(top.id);
-                if (winMesh) {
-                  winMesh.position.y = 0.09 + Math.abs(Math.sin(now * 0.006 + idx * 0.6)) * 0.48;
-                }
-              }
-            });
-          }
-
-          renderer.render(scene, camera);
-        }
-        animFrameId = requestAnimationFrame(animate);
+      initGame();
+      B3D.ensureThree().then((threeLib) => {
+        if (isDestroyed || !threeLib) return;
+        initStage(threeLib);
       });
 
       return () => {
         isDestroyed = true;
-        if (animFrameId) cancelAnimationFrame(animFrameId);
-        window.removeEventListener('resize', onResize);
-        if (renderer && renderer.domElement) {
-          renderer.dispose();
+        if (cpuTimer) clearTimeout(cpuTimer);
+        if (st) {
+          if (B3D.current === st) B3D.current = null;
+          st.destroy();
+          st = null;
         }
       };
     }

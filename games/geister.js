@@ -1,24 +1,19 @@
 /**
- * 👻 3D ガイスター (Geister / 良いおばけと悪いおばけ) - AAA ゴシック古城3D＆究極心理戦エディション
- * Board Arena Plugin (Godot 4.7 GLB + Three.js High-Resolution 3D WebGL)
+ * ガイスター (Geister) 2人
+ * 背中に青 (良いおばけ) と赤 (悪いおばけ) の印を隠した8体のおばけで戦う読み合いのゲーム。
  *
- * 🌟 AAA 特徴:
- * 1. 【公式ガイスター完全ルール実装 (秘密の初期配置・3大勝利条件・P2Pオンライン＆心理戦AI対応)】
- *    - 6×6 古城フロア＆四隅の脱出出口マス、各プレイヤー8体のおばけ（🔵良いおばけ×4、🔴悪いおばけ×4）
- *    - 初期配置フェーズ：自陣8マス（中央4列×2段）のおばけをクリックして青と赤の配置を自由に入れ替え可能！（陣形プリセット付き）
- *    - 3つの公式勝利条件を完全網羅：
- *      ① 相手の「🔵良いおばけ」を4体すべて捕獲する
- *      ② 自分の「🔴悪いおばけ」を4体すべて相手に捕獲させる（わざと食べさせるブラフ勝利！）
- *      ③ 自分の「🔵良いおばけ」1体を、敵陣の角の出口マスからさらに盤外へ脱出させる！
- * 2. 【Godot 4.7 GLB 3Dゴーストモデル ＋ 浮遊アニメーション＆捕獲台座】
- *    - 自分のおばけの背中には青/赤の宝石が輝き、相手のおばけの正体は見えないリアルな非対称3D視点！
- *    - 残り赤1体時の「囮の特攻」や、赤おばけを出口へ走らせて青に見せかける「偽装脱出ブラフ」を行う本格AI搭載！
+ * - 公式ルール: 6×6 の盤。自分の青を敵陣の角から盤外へ出す、相手の青を4体取る、
+ *   自分の赤を4体すべて取らせる、のいずれかで勝ち。駒は上下左右に1マス動き、相手の駒に重なると取る。
+ * - 配置: 自陣の2体を選ぶと位置を入れ替えられる。並びの型 (ランダム・赤を前・青を前) も選べる
+ * - CPU は青を出口へ急がせ、赤が減ると相手に取らせに行く。出口に迫る駒は優先して取る
+ * - 卓は共通エンジン (arena-3d-engine.js) のステージに、寄木の盤とおばけの駒を置いて描く
  */
 
 (function () {
   const BOARD_SIZE = 6;
+  const UI_FONT = '"Zen Kaku Gothic New", "Hiragino Sans", "Yu Gothic UI", sans-serif';
 
-  // Web Audio ゴシックサウンドエフェクト
+  // Web Audio サウンド
   const GeisterSfx = {
     ctx: null,
     init() {
@@ -68,18 +63,146 @@
     return a;
   }
 
+  // ====================================================
+  // 盤の印刷面 (canvas)
+  // ====================================================
+  // 盤は 7×7 (マス 1.0 × 6 と縁 0.5)。canvas の上が奥 (相手側)。
+  function paintBoard(ctx, w, h) {
+    const B3D = window.BoardArena3D;
+    const unit = w / 7;
+    const rng = B3D.mulberry32(4242);
+
+    // 縁
+    B3D.canvas.paintWood(ctx, 0, 0, w, h, B3D.WOODS.darkWalnut, 31, false);
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.18)';
+    ctx.fillRect(0, 0, w, h);
+
+    // 寄木のマス
+    for (let r = 0; r < BOARD_SIZE; r++) {
+      for (let c = 0; c < BOARD_SIZE; c++) {
+        const x = unit * (0.5 + c);
+        const y = unit * (0.5 + r);
+        const vertical = (r + c) % 2 === 0;
+        B3D.canvas.paintWood(ctx, x, y, unit, unit, B3D.WOODS.oak, 100 + r * 7 + c, vertical);
+        ctx.fillStyle = vertical ? 'rgba(255, 236, 205, 0.06)' : 'rgba(30, 16, 6, 0.1)';
+        ctx.fillRect(x, y, unit, unit);
+        ctx.fillStyle = `rgba(0, 0, 0, ${0.02 + rng() * 0.06})`;
+        ctx.fillRect(x, y, unit, unit);
+      }
+    }
+
+    // 古い屋敷の床らしく、全体を少し沈んだ色に
+    ctx.fillStyle = 'rgba(64, 34, 14, 0.24)';
+    ctx.fillRect(unit * 0.5, unit * 0.5, unit * 6, unit * 6);
+
+    // 溝
+    ctx.lineWidth = 3;
+    for (let i = 0; i <= BOARD_SIZE; i++) {
+      const p = unit * (0.5 + i);
+      ctx.strokeStyle = 'rgba(18, 10, 4, 0.7)';
+      ctx.beginPath();
+      ctx.moveTo(p, unit * 0.5);
+      ctx.lineTo(p, h - unit * 0.5);
+      ctx.moveTo(unit * 0.5, p);
+      ctx.lineTo(w - unit * 0.5, p);
+      ctx.stroke();
+    }
+    ctx.lineWidth = 1;
+    ctx.strokeStyle = 'rgba(255, 238, 210, 0.12)';
+    for (let i = 0; i <= BOARD_SIZE; i++) {
+      const p = unit * (0.5 + i) + 2;
+      ctx.beginPath();
+      ctx.moveTo(p, unit * 0.5);
+      ctx.lineTo(p, h - unit * 0.5);
+      ctx.moveTo(unit * 0.5, p);
+      ctx.lineTo(w - unit * 0.5, p);
+      ctx.stroke();
+    }
+
+    // 真鍮の縁取り
+    ctx.strokeStyle = 'rgba(201, 166, 96, 0.75)';
+    ctx.lineWidth = 3;
+    ctx.strokeRect(unit * 0.32, unit * 0.32, w - unit * 0.64, h - unit * 0.64);
+    ctx.lineWidth = 1;
+    ctx.strokeRect(unit * 0.4, unit * 0.4, w - unit * 0.8, h - unit * 0.8);
+
+    // 初期配置の枠 (中央4列×2段)
+    ctx.setLineDash([10, 8]);
+    ctx.strokeStyle = 'rgba(240, 226, 196, 0.32)';
+    ctx.lineWidth = 2;
+    [[0, 1], [4, 5]].forEach(([r0]) => {
+      ctx.strokeRect(unit * 1.5 + 8, unit * (0.5 + r0) + 8, unit * 4 - 16, unit * 2 - 16);
+    });
+    ctx.setLineDash([]);
+
+    // 四隅の出口 (盤の外を指す矢印)
+    [[0, 0], [0, 5], [5, 0], [5, 5]].forEach(([r, c]) => {
+      const cx = unit * (1 + c);
+      const cy = unit * (1 + r);
+      const dx = c === 0 ? -1 : 1;
+      const dy = r === 0 ? -1 : 1;
+      ctx.save();
+      ctx.translate(cx, cy);
+      ctx.rotate(Math.atan2(dy, dx));
+      ctx.shadowColor = 'rgba(0, 0, 0, 0.45)';
+      ctx.shadowBlur = 6;
+      ctx.shadowOffsetY = 2;
+      ctx.fillStyle = 'rgba(232, 208, 150, 0.85)';
+      const s = unit * 0.3;
+      for (let k = 0; k < 2; k++) {
+        const o = k * s * 0.55 - s * 0.1;
+        ctx.beginPath();
+        ctx.moveTo(o - s * 0.35, -s * 0.5);
+        ctx.lineTo(o + s * 0.15, 0);
+        ctx.lineTo(o - s * 0.35, s * 0.5);
+        ctx.lineTo(o - s * 0.5, s * 0.35);
+        ctx.lineTo(o - s * 0.15, 0);
+        ctx.lineTo(o - s * 0.5, -s * 0.35);
+        ctx.closePath();
+        ctx.fill();
+      }
+      ctx.restore();
+      ctx.strokeStyle = 'rgba(232, 208, 150, 0.4)';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.arc(cx, cy, unit * 0.38, 0, Math.PI * 2);
+      ctx.stroke();
+    });
+
+    ctx.fillStyle = 'rgba(232, 208, 150, 0.55)';
+    ctx.font = `500 ${Math.round(unit * 0.15)}px ${UI_FONT}`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    [[0, 0], [0, 5], [5, 0], [5, 5]].forEach(([r, c]) => {
+      ctx.fillText('出口', unit * (1 + c), unit * (r === 0 ? 0.25 : 6.75));
+    });
+  }
+
+  // 出口の矢印 (盤外の脱出先に置く)
+  function arrowShape(THREE) {
+    const s = new THREE.Shape();
+    s.moveTo(-0.18, -0.2);
+    s.lineTo(0.12, -0.2);
+    s.lineTo(0.12, -0.32);
+    s.lineTo(0.36, 0);
+    s.lineTo(0.12, 0.32);
+    s.lineTo(0.12, 0.2);
+    s.lineTo(-0.18, 0.2);
+    s.closePath();
+    return s;
+  }
+
   window.BoardArena.registerGame({
     id: 'geister',
-    name: '3D ガイスター (Geister)',
-    icon: '👻',
-    category: '🕵️ 究極の2人心理戦 (AAA 3D)',
+    name: 'ガイスター',
+    icon: '',
+    category: 'ブラフ',
     minPlayers: 2,
     maxPlayers: 2,
-    description: '背中に青（良いおばけ）と赤（悪いおばけ）を隠した8体のおばけで戦う伝説の2人用ブラフ心理戦！青を4体取るか、赤を4体取らせるか、敵陣の角から脱出せよ！',
+    description: '背中に青と赤の印を隠した8体のおばけで戦う2人用の読み合い。青を出口から逃がすか、相手の青を4体取るか、赤を4体取らせれば勝ち。',
 
     mount(container, bridge) {
       let isDestroyed = false;
-      let animFrameId = null;
       let cpuTimer = null;
 
       let vsCpu = !bridge.isConnected();
@@ -87,7 +210,7 @@
       let aiDifficulty = 'pro'; // 'normal' | 'pro' | 'master'
 
       // ゲーム状態
-      // ghosts: Array of { id, owner: 1|2, color: 'blue'|'red', r, c, captured: false, escaped: false }
+      // ghosts: { id, owner: 1|2, color: 'blue'|'red', r, c, captured, escaped }
       let ghosts = [];
       let phase = 'SETUP'; // 'SETUP' | 'PLAY' | 'GAME_OVER'
       let turnPlayer = 1;
@@ -96,220 +219,186 @@
       let winnerPlayer = null;
       let winReasonText = '';
       let lastMoveInfo = null;
-      let bannerText = '👻【秘密の初期配置】自陣のおばけを2体クリックして🔵青と🔴赤の位置を入れ替え、「🚀 対局開始」を押してください！';
+      let gameSerial = 0;
+      let bannerText = '';
+
+      const nameOf = (p) => (p === myPlayer ? 'あなた' : (vsCpu ? 'CPU' : '相手'));
 
       container.innerHTML = `
         <style>
           .gst-wrapper {
             width: 100%;
-            max-width: 100%;
             display: flex;
             flex-direction: column;
-            gap: 8px;
+            gap: 10px;
             user-select: none;
-            color: #f8fafc;
-            font-family: 'Noto Sans JP', sans-serif;
+            color: var(--text);
+            font-family: var(--font-ui);
           }
-          .gst-top-bar {
+          .gst-top-bar, .gst-dock {
             display: flex;
             align-items: center;
             justify-content: space-between;
             flex-wrap: wrap;
+            gap: 10px 16px;
+            padding: 10px 12px;
+            background: var(--bg-raised);
+            border: 1px solid var(--line);
+            border-radius: 6px;
+          }
+          .gst-players-row { display: flex; flex-wrap: wrap; gap: 6px; flex: 1 1 420px; min-width: 0; }
+          .gst-player {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 7px 12px 7px 10px;
+            background: var(--surface);
+            border: 1px solid var(--line);
+            border-radius: 4px;
+            transition: border-color 0.25s, background 0.25s;
+          }
+          .gst-player.is-turn { border-color: rgba(226, 184, 103, 0.6); background: rgba(226, 184, 103, 0.07); }
+          .gst-swatch { flex: none; width: 12px; height: 12px; border-radius: 50%; background: var(--c); box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.35); }
+          .gst-player-name { font-size: 13px; font-weight: 700; white-space: nowrap; }
+          .gst-player-sub { display: flex; gap: 12px; margin-top: 3px; font-size: 11px; color: var(--text-3); white-space: nowrap; }
+          .gst-track { display: inline-flex; align-items: center; gap: 3px; }
+          .gst-track span { margin-right: 3px; }
+          .gst-track i { width: 8px; height: 8px; border-radius: 50%; border: 1px solid var(--t); opacity: 0.8; }
+          .gst-track i.on { background: var(--t); opacity: 1; }
+          .gst-controls, .gst-actions { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+          .gst-actions { justify-content: flex-end; }
+          .gst-btn, .gst-select {
+            appearance: none;
+            -webkit-appearance: none;
+            display: inline-flex;
+            align-items: center;
             gap: 8px;
-            background: rgba(15, 23, 42, 0.92);
-            border: 1px solid rgba(168, 85, 247, 0.42);
-            border-radius: 12px;
-            padding: 6px 14px;
-            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.55);
-          }
-          .gst-score-cards {
-            display: flex;
-            gap: 12px;
-            flex-wrap: wrap;
-            align-items: center;
-          }
-          .gst-pcard {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            background: rgba(30, 41, 59, 0.9);
-            border: 2px solid rgba(148, 163, 184, 0.28);
-            border-radius: 10px;
-            padding: 5px 12px;
-            font-size: 12px;
-          }
-          .gst-pcard.active-turn {
-            border-color: #c084fc;
-            background: rgba(168, 85, 247, 0.16);
-            box-shadow: 0 0 16px rgba(168, 85, 247, 0.4);
-          }
-          .gst-pill-blue {
-            background: rgba(37, 99, 235, 0.25);
-            border: 1px solid #60a5fa;
-            color: #bfdbfe;
-            padding: 2px 8px;
-            border-radius: 6px;
-            font-weight: 900;
-          }
-          .gst-pill-red {
-            background: rgba(225, 29, 72, 0.25);
-            border: 1px solid #fb7185;
-            color: #fecdd3;
-            padding: 2px 8px;
-            border-radius: 6px;
-            font-weight: 900;
-          }
-          .gst-btn {
-            background: rgba(30, 41, 59, 0.94);
-            border: 1px solid rgba(148, 163, 184, 0.42);
-            color: #f8fafc;
-            font-size: 12px;
-            font-weight: 800;
             padding: 6px 12px;
-            border-radius: 8px;
+            background: transparent;
+            border: 1px solid var(--line-strong);
+            border-radius: 4px;
+            color: var(--text-2);
+            font: 500 12px/1.4 var(--font-ui);
+            letter-spacing: 0.04em;
+            white-space: nowrap;
             cursor: pointer;
-            transition: all 0.15s;
+            transition: color 0.2s, border-color 0.2s, background 0.2s;
           }
-          .gst-btn:hover:not(:disabled) {
-            border-color: #c084fc;
-            color: #e9d5ff;
-            transform: translateY(-1px);
+          .gst-select {
+            padding-right: 28px;
+            background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M1 1l4 4 4-4' fill='none' stroke='%23a8a6a0' stroke-width='1.2'/%3E%3C/svg%3E") no-repeat right 10px center;
           }
-          .gst-btn-primary {
-            background: linear-gradient(135deg, #9333ea, #6b21a8);
-            border-color: #e9d5ff;
-            color: #ffffff;
+          .gst-select option { background: #161618; color: #ecebe6; }
+          .gst-btn:hover:not(:disabled), .gst-select:hover { color: var(--text); border-color: rgba(255, 255, 255, 0.34); }
+          .gst-btn:disabled { opacity: 0.35; cursor: not-allowed; }
+          .gst-btn.is-primary { background: var(--text); border-color: var(--text); color: var(--text-inverse); font-weight: 700; }
+          .gst-btn.is-primary:hover:not(:disabled) { background: #fff; color: var(--text-inverse); }
+          .gst-btn.is-active { border-color: rgba(226, 184, 103, 0.7); color: #e2b867; }
+
+          .gst-stage-wrap { position: relative; }
+          .gst-stage-wrap .ba3d-stage {
+            height: clamp(440px, calc(100vh - 290px), 860px);
+            background: radial-gradient(90% 80% at 50% 40%, #241d24 0%, #120e12 60%, #070507 100%);
           }
-          .gst-btn-emerald {
-            background: linear-gradient(135deg, #10b981, #059669);
-            border-color: #6ee7b7;
-            color: #ffffff;
-          }
-          .gst-stage-wrap {
-            position: relative;
-            width: 100%;
-            height: calc(100vh - 265px);
-            min-height: 500px;
-            max-height: 820px;
-            background: radial-gradient(circle at 50% 35%, #2e1065 0%, #0f172a 60%, #020617 100%);
-            border-radius: 16px;
-            border: 1px solid rgba(168, 85, 247, 0.4);
-            box-shadow: 0 20px 50px rgba(0, 0, 0, 0.8);
-            overflow: hidden;
-          }
-          .gst-stage-wrap canvas {
-            width: 100% !important;
-            height: 100% !important;
-            display: block;
-            cursor: grab;
-          }
-          .gst-stage-wrap canvas:active {
-            cursor: grabbing;
-          }
-          .gst-hud-top {
+          .gst-status {
             position: absolute;
-            top: 10px;
-            left: 14px;
-            right: 14px;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            pointer-events: none;
-            z-index: 10;
-            gap: 10px;
-          }
-          .gst-banner {
-            background: rgba(15, 23, 42, 0.88);
+            top: 12px;
+            left: 12px;
+            z-index: 5;
+            max-width: min(500px, calc(100% - 130px));
+            padding: 9px 13px;
+            background: rgba(14, 12, 11, 0.62);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 4px;
             backdrop-filter: blur(8px);
-            border: 1px solid rgba(192, 132, 252, 0.5);
-            padding: 6px 14px;
-            border-radius: 999px;
-            font-size: 13px;
-            font-weight: 800;
-            color: #f3e8ff;
-            pointer-events: auto;
-            box-shadow: 0 6px 20px rgba(0,0,0,0.55);
+            -webkit-backdrop-filter: blur(8px);
+            color: #ecebe6;
+            pointer-events: none;
           }
-          .gst-bottom-dock {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            flex-wrap: wrap;
-            gap: 10px;
-            background: rgba(15, 23, 42, 0.95);
-            border: 1px solid rgba(168, 85, 247, 0.35);
-            border-radius: 12px;
-            padding: 8px 14px;
-          }
+          .gst-phase { font-size: 10px; letter-spacing: 0.14em; color: rgba(236, 235, 230, 0.55); }
+          .gst-announce { margin-top: 3px; font-size: 13px; line-height: 1.55; }
+
+          .gst-dock-info { display: flex; flex-direction: column; gap: 4px; flex: 1 1 360px; min-width: 0; }
+          .gst-dock-label { font-size: 11px; letter-spacing: 0.08em; color: var(--text-3); }
+          .gst-rules { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 12px; color: var(--text-2); }
+          .gst-rules b { font-weight: 700; color: var(--text); }
+          .gst-wait { font-size: 12px; color: var(--text-3); }
+          .gst-prompt { font-size: 12px; color: #e2b867; }
+
+          .ba3d-label.gst-tray { padding: 0; background: none; color: rgba(236, 235, 230, 0.58); font-size: 11px; letter-spacing: 0.08em; text-shadow: 0 1px 3px rgba(0, 0, 0, 0.9); }
+
           .gst-modal-overlay {
             position: absolute;
             inset: 0;
-            background: rgba(9, 13, 22, 0.78);
-            backdrop-filter: blur(5px);
+            z-index: 20;
             display: none;
             align-items: center;
             justify-content: center;
-            z-index: 30;
+            padding: 16px;
+            background: rgba(8, 7, 6, 0.55);
+            backdrop-filter: blur(5px);
+            -webkit-backdrop-filter: blur(5px);
           }
-          .gst-modal-overlay.visible {
-            display: flex;
-          }
+          .gst-modal-overlay.visible { display: flex; }
           .gst-modal-box {
-            background: linear-gradient(145deg, #1e1b4b, #0f172a);
-            border: 2px solid #c084fc;
-            border-radius: 16px;
-            padding: 22px 26px;
-            max-width: 480px;
-            width: 92%;
-            box-shadow: 0 24px 60px rgba(0,0,0,0.9);
+            width: min(420px, 100%);
+            padding: 24px;
             text-align: center;
+            background: var(--bg-raised);
+            border: 1px solid var(--line-strong);
+            border-radius: 6px;
+            box-shadow: 0 24px 60px rgba(0, 0, 0, 0.6);
+          }
+          .gst-modal-title { font-size: 19px; font-weight: 700; }
+          .gst-modal-desc { margin-top: 8px; font-size: 13px; line-height: 1.7; color: var(--text-2); }
+          .gst-modal-actions { display: flex; gap: 6px; justify-content: center; margin-top: 18px; }
+
+          @media (max-width: 640px) {
+            .gst-stage-wrap .ba3d-stage { height: min(64vh, 480px); }
+            .gst-status { max-width: calc(100% - 110px); }
+            .gst-announce { font-size: 12px; }
           }
         </style>
 
         <div class="gst-wrapper">
           <div class="gst-top-bar">
-            <div class="gst-score-cards" id="gst-score-cards"></div>
-            <div style="display:flex;gap:6px;align-items:center;">
-              <select id="gst-ai-sel" class="gst-btn">
-                <option value="normal">🤖 AI: 初級ゴースト</option>
-                <option value="pro" selected>🤖 AI: 心理戦プロ</option>
-                <option value="master">🤖 AI: 読心マスター</option>
+            <div class="gst-players-row" id="gst-players-row"></div>
+            <div class="gst-controls">
+              <select id="gst-ai-sel" class="gst-select" aria-label="CPU の強さ">
+                <option value="normal">CPU: やさしい</option>
+                <option value="pro" selected>CPU: ふつう</option>
+                <option value="master">CPU: つよい</option>
               </select>
-              <button class="gst-btn" id="gst-new-btn">🔄 新規ゲーム</button>
+              <button class="gst-btn" id="gst-new-btn">新しいゲーム</button>
             </div>
           </div>
 
           <div class="gst-stage-wrap" id="gst-stage-wrap">
-            <div class="gst-hud-top">
-              <div class="gst-banner" id="gst-banner">👻 3D ガイスター (Geister)</div>
-              <div style="display:flex;gap:6px;pointer-events:auto;">
-                <button class="gst-btn" id="gst-cam-p1">🎥 自分視点 (背中確認)</button>
-                <button class="gst-btn" id="gst-cam-top">🎥 真上俯瞰</button>
-              </div>
+            <div class="gst-status">
+              <div class="gst-phase" id="gst-phase"></div>
+              <div class="gst-announce" id="gst-announce"></div>
             </div>
-
             <div class="gst-modal-overlay" id="gst-modal-overlay">
               <div class="gst-modal-box" id="gst-modal-box"></div>
             </div>
           </div>
 
-          <div class="gst-bottom-dock" id="gst-bottom-dock"></div>
+          <div class="gst-dock" id="gst-dock"></div>
         </div>
       `;
 
-      const scoreCardsEl = container.querySelector('#gst-score-cards');
+      const playersRowEl = container.querySelector('#gst-players-row');
       const aiSelEl = container.querySelector('#gst-ai-sel');
       const newBtnEl = container.querySelector('#gst-new-btn');
       const stageWrapEl = container.querySelector('#gst-stage-wrap');
-      const bannerEl = container.querySelector('#gst-banner');
-      const camP1Btn = container.querySelector('#gst-cam-p1');
-      const camTopBtn = container.querySelector('#gst-cam-top');
+      const phaseEl = container.querySelector('#gst-phase');
+      const announceEl = container.querySelector('#gst-announce');
       const modalOverlayEl = container.querySelector('#gst-modal-overlay');
       const modalBoxEl = container.querySelector('#gst-modal-box');
-      const bottomDockEl = container.querySelector('#gst-bottom-dock');
+      const dockEl = container.querySelector('#gst-dock');
 
       // ====================================================
-      // 1. ゲーム初期化＆配置ロジック
+      // 1. 初期配置
       // ====================================================
       function createInitialGhosts(formation = 'random') {
         ghosts = [];
@@ -321,43 +410,26 @@
           return shuffle(['blue', 'blue', 'blue', 'blue', 'red', 'red', 'red', 'red']);
         }
 
-        const p1Colors = buildColors(formation);
-        const p2Colors = buildColors('random');
+        const p1Colors = buildColors(myPlayer === 1 ? formation : 'random');
+        const p2Colors = buildColors(myPlayer === 2 ? formation : 'random');
 
-        // P1: row 4 (前衛), row 5 (後衛), col 1..4
+        // P1: 前列 row 4、後列 row 5 (手前側)
         let idx1 = 0;
         for (const r of [4, 5]) {
           for (let c = 1; c <= 4; c++) {
-            ghosts.push({
-              id: idCounter++,
-              owner: 1,
-              color: p1Colors[idx1++],
-              r,
-              c,
-              captured: false,
-              escaped: false
-            });
+            ghosts.push({ id: idCounter++, owner: 1, color: p1Colors[idx1++], r, c, captured: false, escaped: false });
           }
         }
-
-        // P2: row 1 (前衛), row 0 (後衛), col 1..4
+        // P2: 前列 row 1、後列 row 0 (奥側)
         let idx2 = 0;
         for (const r of [1, 0]) {
           for (let c = 1; c <= 4; c++) {
-            ghosts.push({
-              id: idCounter++,
-              owner: 2,
-              color: p2Colors[idx2++],
-              r,
-              c,
-              captured: false,
-              escaped: false
-            });
+            ghosts.push({ id: idCounter++, owner: 2, color: p2Colors[idx2++], r, c, captured: false, escaped: false });
           }
         }
       }
 
-      function initGame(formation = 'random') {
+      function initGame(formation = 'random', keepSerial = false) {
         if (cpuTimer) clearTimeout(cpuTimer);
         aiDifficulty = aiSelEl.value || 'pro';
         createInitialGhosts(formation);
@@ -368,8 +440,9 @@
         winnerPlayer = null;
         winReasonText = '';
         lastMoveInfo = null;
+        if (!keepSerial) gameSerial++;
         modalOverlayEl.classList.remove('visible');
-        bannerText = '👻【秘密の初期配置】自陣のおばけを2体クリックして🔵青と🔴赤の位置を入れ替えるか、「🚀 対局開始」を押してください！';
+        bannerText = '配置を決めます。自分のおばけを2体選ぶと位置が入れ替わります。背中の印が青なら良いおばけ、赤なら悪いおばけです。';
         renderAll();
       }
 
@@ -381,12 +454,12 @@
         return ghosts.find((g) => g.id === id) || null;
       }
 
-      // 選択したおばけの合法移動先リスト [{ r, c, isEscape: boolean, targetGhost: null|ghost }]
+      // 合法手 [{ r, c, isEscape, targetGhost }]
       function getValidMovesForGhost(g) {
         if (!g || g.captured || g.escaped) return [];
         const moves = [];
 
-        // 1. もし良いおばけ（青）が相手陣地の脱出マスにいるなら「盤外脱出（即勝利）」が可能！
+        // 敵陣の角にいる青は盤外へ出られる
         if (g.color === 'blue') {
           if (g.owner === 1 && g.r === 0 && (g.c === 0 || g.c === 5)) {
             moves.push({ r: -1, c: g.c, isEscape: true, targetGhost: null });
@@ -395,37 +468,31 @@
           }
         }
 
-        // 2. 上下左右1マス移動
-        const dirs = [[-1, 0], [1, 0], [0, -1], [0, 1]];
-        dirs.forEach(([dr, dc]) => {
+        [[-1, 0], [1, 0], [0, -1], [0, 1]].forEach(([dr, dc]) => {
           const nr = g.r + dr;
           const nc = g.c + dc;
           if (nr < 0 || nr >= BOARD_SIZE || nc < 0 || nc >= BOARD_SIZE) return;
           const occ = getGhostAt(nr, nc);
-          if (occ && occ.owner === g.owner) return; // 自分のコマがいる場所へは進めない
+          if (occ && occ.owner === g.owner) return;
           moves.push({ r: nr, c: nc, isEscape: false, targetGhost: occ });
         });
 
         return moves;
       }
 
-      // 勝敗判定
       function checkWinConditions() {
         for (const p of [1, 2]) {
           const opp = p === 1 ? 2 : 1;
-          // 条件1: 自分の青おばけが脱出した
           if (ghosts.some((g) => g.owner === p && g.color === 'blue' && g.escaped)) {
-            return { winner: p, reason: `🚪 P${p} の「🔵良いおばけ」が敵陣の出口から脱出成功！` };
+            return { winner: p, reason: `${nameOf(p)}の青いおばけが出口から抜け出しました。` };
           }
-          // 条件2: 相手の青おばけが全滅した
           const oppBlueRemaining = ghosts.filter((g) => g.owner === opp && g.color === 'blue' && !g.captured).length;
           if (oppBlueRemaining === 0) {
-            return { winner: p, reason: `👻 P${p} が相手の「🔵良いおばけ」を4体すべて捕獲しました！` };
+            return { winner: p, reason: `${nameOf(p)}が相手の青いおばけを4体すべて取りました。` };
           }
-          // 条件3: 自分の赤おばけが全滅した（4体すべて相手に取らせた）
           const myRedRemaining = ghosts.filter((g) => g.owner === p && g.color === 'red' && !g.captured).length;
           if (myRedRemaining === 0) {
-            return { winner: p, reason: `😈 ブラフ大成功！ P${p} が自分の「🔴悪いおばけ」を4体すべて相手に取らせました！` };
+            return { winner: p, reason: `${nameOf(p)}の赤いおばけが4体すべて取られました。` };
           }
         }
         return null;
@@ -449,14 +516,14 @@
             target.captured = true;
             if (target.color === 'blue') {
               GeisterSfx.captureBlue();
-              bannerText = `⚡ P${g.owner} が相手のおばけを捕獲！正体は【🔵良いおばけ】でした！`;
+              bannerText = `${nameOf(g.owner)}がおばけを取りました。正体は青（良いおばけ）でした。`;
             } else {
               GeisterSfx.captureRed();
-              bannerText = `💥 P${g.owner} が相手のおばけを捕獲！正体は【🔴悪いおばけ（罠）】でした！`;
+              bannerText = `${nameOf(g.owner)}がおばけを取りました。正体は赤（悪いおばけ）でした。`;
             }
           } else {
             GeisterSfx.move();
-            bannerText = `👻 ${g.owner === 1 ? 'あなた (P1)' : '相手 (P2)'} がおばけを1マス進めました。`;
+            bannerText = `${nameOf(g.owner)}がおばけを1マス動かしました。`;
           }
         }
 
@@ -465,657 +532,645 @@
           phase = 'GAME_OVER';
           winnerPlayer = winCheck.winner;
           winReasonText = winCheck.reason;
-          bannerText = `🏆 勝負あり！ ${winReasonText}`;
+          bannerText = winReasonText;
           GeisterSfx.win();
-          openGameOverModal();
           renderAll();
+          // 正体が明かされる様子を見せてから結果を出す
+          cpuTimer = setTimeout(openGameOverModal, 1300);
           return;
         }
 
         turnPlayer = turnPlayer === 1 ? 2 : 1;
         renderAll();
 
-        if (vsCpu && turnPlayer === 2 && phase === 'PLAY') {
-          cpuTimer = setTimeout(runCpuTurn, 680);
+        if (vsCpu && turnPlayer !== myPlayer && phase === 'PLAY') {
+          cpuTimer = setTimeout(runCpuTurn, 900);
         }
       }
 
       // ====================================================
-      // 2. 心理戦AI思考エンジン (P2 CPU)
+      // 2. CPU (相手側)
       // ====================================================
       function runCpuTurn() {
-        if (isDestroyed || phase !== 'PLAY' || turnPlayer !== 2) return;
-        const cpuGhosts = ghosts.filter((g) => g.owner === 2 && !g.captured && !g.escaped);
+        const cpuSide = myPlayer === 1 ? 2 : 1;
+        if (isDestroyed || phase !== 'PLAY' || turnPlayer !== cpuSide) return;
+        const cpuGhosts = ghosts.filter((g) => g.owner === cpuSide && !g.captured && !g.escaped);
         const allMoves = [];
-
         cpuGhosts.forEach((g) => {
-          const moves = getValidMovesForGhost(g);
-          moves.forEach((m) => {
+          getValidMovesForGhost(g).forEach((m) => {
             allMoves.push({ ghost: g, move: m, score: evaluateCpuMove(g, m) });
           });
         });
-
         if (allMoves.length === 0) return;
         allMoves.sort((a, b) => b.score - a.score);
-        const chosen = allMoves[0];
-        executeMove(chosen.ghost.id, chosen.move);
+        executeMove(allMoves[0].ghost.id, allMoves[0].move);
       }
 
       function evaluateCpuMove(g, m) {
-        // 1. 脱出できるなら最優先で即勝利！
         if (m.isEscape) return 10000;
 
+        const me = g.owner;
+        const opp = me === 1 ? 2 : 1;
+        const goalRow = me === 2 ? 5 : 0;   // CPU の脱出口がある段
+        const homeRow = me === 2 ? 0 : 5;   // CPU 自陣の段
         let score = (Math.random() - 0.5) * 4;
-        const cpuRedLeft = ghosts.filter((x) => x.owner === 2 && x.color === 'red' && !x.captured).length;
-        const p1RedLeft = ghosts.filter((x) => x.owner === 1 && x.color === 'red' && !x.captured).length;
+        const cpuRedLeft = ghosts.filter((x) => x.owner === me && x.color === 'red' && !x.captured).length;
+        const oppRedLeft = ghosts.filter((x) => x.owner === opp && x.color === 'red' && !x.captured).length;
 
-        // 2. 自分の青おばけは手前の出口 (5,0) または (5,5) を目指す
         if (g.color === 'blue') {
-          const distLeftExit = Math.abs(5 - m.r) + Math.abs(0 - m.c);
-          const distRightExit = Math.abs(5 - m.r) + Math.abs(5 - m.c);
-          const minDist = Math.min(distLeftExit, distRightExit);
+          // 青は出口を目指す
+          const minDist = Math.min(Math.abs(goalRow - m.r) + m.c, Math.abs(goalRow - m.r) + Math.abs(5 - m.c));
           score += (10 - minDist) * 5;
-          if (m.r === 5 && (m.c === 0 || m.c === 5)) score += 60; // 出口到達！
+          if (m.r === goalRow && (m.c === 0 || m.c === 5)) score += 60;
         } else {
-          // 自分の赤おばけ：もし自分の残り赤が1〜2体なら、積極的に相手のコマの隣へ突っ込んで取らせる（ブラフ特攻）！
-          const p1Ghosts = ghosts.filter((x) => x.owner === 1 && !x.captured);
-          let nearestP1 = 99;
-          p1Ghosts.forEach((p1g) => {
-            const d = Math.abs(p1g.r - m.r) + Math.abs(p1g.c - m.c);
-            if (d < nearestP1) nearestP1 = d;
+          // 赤: 残りが少なければ相手の近くへ寄って取らせる。多いうちは青のふりをして前進
+          let nearest = 99;
+          ghosts.filter((x) => x.owner === opp && !x.captured && !x.escaped).forEach((x) => {
+            nearest = Math.min(nearest, Math.abs(x.r - m.r) + Math.abs(x.c - m.c));
           });
-          if (cpuRedLeft <= 2) {
-            score += (10 - nearestP1) * 8;
-          } else {
-            // 出口へ向かう青のフリをするブラフ前進
-            score += m.r * 4;
-          }
+          if (cpuRedLeft <= 2) score += (10 - nearest) * 8;
+          else score += Math.abs(m.r - homeRow) * 4;
         }
 
-        // 3. 相手のコマを捕獲する手の評価
         if (m.targetGhost) {
-          // 相手がすでに赤を3体失っている（あと1体赤を取ると自分が負ける！）時は、出口直前のコマ以外はむやみに取らない！
-          const isNearCpuExit = m.r <= 1 && (m.c <= 1 || m.c >= 4);
-          if (p1RedLeft === 1 && !isNearCpuExit && aiDifficulty !== 'normal') {
-            score -= 45; // 赤を踏む罠を警戒して回避！
-          } else {
-            score += 35;
-          }
-          if (isNearCpuExit) {
-            score += 80; // 自陣出口に迫る敵は絶対阻止！
-          }
+          // 自陣の出口に迫る駒は必ず取る。相手の赤が残り1体なら、むやみに取らない
+          const isNearCpuExit = Math.abs(m.r - homeRow) <= 1 && (m.c <= 1 || m.c >= 4);
+          if (oppRedLeft === 1 && !isNearCpuExit && aiDifficulty !== 'normal') score -= 45;
+          else score += 35;
+          if (isNearCpuExit) score += 80;
         }
-
         return score;
       }
 
       function openGameOverModal() {
+        if (isDestroyed || phase !== 'GAME_OVER') return;
         const isWin = winnerPlayer === myPlayer;
         modalBoxEl.innerHTML = `
-          <div style="font-size:24px;font-weight:900;color:${isWin ? '#fde047' : '#fb7185'};margin-bottom:8px;">
-            ${isWin ? '🏆 勝利！ (VICTORY)' : '💀 敗北... (DEFEAT)'}
+          <div class="gst-modal-title">${isWin ? 'あなたの勝ちです' : 'あなたの負けです'}</div>
+          <p class="gst-modal-desc">${winReasonText}<br>すべてのおばけの正体を公開しました。</p>
+          <div class="gst-modal-actions">
+            <button class="gst-btn" id="gst-modal-close">盤面を見る</button>
+            <button class="gst-btn is-primary" id="gst-rematch-btn">もう一度遊ぶ</button>
           </div>
-          <div style="font-size:14px;color:#f3e8ff;font-weight:800;margin-bottom:16px;">
-            ${winReasonText}
-          </div>
-          <div style="font-size:12px;color:#cbd5e1;margin-bottom:18px;">
-            ※ 盤上のすべてのおばけの背中（🔵青・🔴赤の正体）が公開されました！
-          </div>
-          <button class="gst-btn gst-btn-primary" id="gst-rematch-btn">🔄 もう一度プレイする</button>
         `;
         modalOverlayEl.classList.add('visible');
+        modalBoxEl.querySelector('#gst-modal-close').onclick = () => modalOverlayEl.classList.remove('visible');
         modalBoxEl.querySelector('#gst-rematch-btn').onclick = () => initGame('random');
       }
 
       // ====================================================
-      // 3. Three.js + Godot 4.7 GLB ゴシック3D古城ステージ
+      // 3. 3D の卓
       // ====================================================
+      const B3D = window.BoardArena3D;
+      const STEP = 1.0;
+      const BOARD_W = 7.0;
+      const BOARD_T = 0.24;
+      const TABLE_Y = -BOARD_T;
+      const TRAY_X = 4.75;
+      const COLORS = { blue: '#2f6fd0', red: '#c4343f' };
+      const BODY = { 1: '#ddd6e6', 2: '#4a3f5c' };
+
       let THREE = null;
-      let scene = null;
-      let camera = null;
-      let renderer = null;
-      let dynamicGroup = null;
-      let interactiveObjects = [];
-      let floatingGhostMeshes = [];
-      let glbGhostTemplate = null;
-      let maxAniso = 8;
+      let st = null;
+      let picker = null;
+      const view = {
+        gameKey: -1,
+        pieces: null,
+        objs: new Map(), // ghost id -> obj
+        moveMarks: null,
+        lastMarks: null,
+        hoverMark: null,
+        escapeMark: null,
+        glow: null,
+        labels: []
+      };
 
-      let camSpherical = { radius: 13.8, phi: 0.76, theta: 0 };
+      const cellPos = (r, c) => ({ x: (c - 2.5) * STEP, z: (r - 2.5) * STEP });
 
-      function ensureThreeLoaded() {
-        return new Promise((resolve) => {
-          if (window.THREE) return resolve(window.THREE);
-          const s = document.createElement('script');
-          s.src = 'https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js';
-          s.onload = () => resolve(window.THREE);
-          document.head.appendChild(s);
-        });
+      function isMyTurnToMove() {
+        return phase === 'PLAY' && turnPlayer === myPlayer && !(vsCpu && turnPlayer !== myPlayer);
       }
 
-      function init3DStage(threeLib) {
-        THREE = threeLib;
-        const w = stageWrapEl.clientWidth || 960;
-        const h = stageWrapEl.clientHeight || 560;
+      // ---- 盤 ----
+      function buildBoard() {
+        const body = new THREE.Mesh(st.geo.slab(BOARD_W, BOARD_W, BOARD_T, { bevel: 0.035, radius: 0.12 }), st.kit.wood('darkWalnut', { repeat: 0.14, clearcoat: 0.4 }));
+        body.position.y = -BOARD_T / 2;
+        body.castShadow = true;
+        body.receiveShadow = true;
+        st.root.add(body);
 
-        scene = new THREE.Scene();
-        camera = new THREE.PerspectiveCamera(36, w / h, 0.1, 200);
-        renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, powerPreference: 'high-performance' });
-        renderer.setSize(w, h);
-        renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2.5));
-        renderer.shadowMap.enabled = true;
-        renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-        stageWrapEl.appendChild(renderer.domElement);
-
-        maxAniso = renderer.capabilities.getMaxAnisotropy ? renderer.capabilities.getMaxAnisotropy() : 8;
-
-        // ゴシック照明
-        scene.add(new THREE.AmbientLight(0xe2e8f0, 0.88));
-        const moonLight = new THREE.DirectionalLight(0xfef3c7, 1.3);
-        moonLight.position.set(6, 15, 8);
-        moonLight.castShadow = true;
-        moonLight.shadow.mapSize.width = 2048;
-        moonLight.shadow.mapSize.height = 2048;
-        scene.add(moonLight);
-
-        const mysticLight = new THREE.DirectionalLight(0xa855f7, 0.55);
-        mysticLight.position.set(-8, 10, -8);
-        scene.add(mysticLight);
-
-        // 古城の石造りチェッカーボード＆捕獲台座ベース
-        const mansionBase = new THREE.Mesh(
-          new THREE.BoxGeometry(11.6, 0.42, 8.6),
-          new THREE.MeshStandardMaterial({ color: 0x1e1b4b, roughness: 0.45, metalness: 0.2 })
+        const c = B3D.canvas.cached('gst-board', 1400, 1400, paintBoard);
+        const top = new THREE.Mesh(
+          new THREE.PlaneGeometry(BOARD_W - 0.07, BOARD_W - 0.07).rotateX(-Math.PI / 2),
+          new THREE.MeshPhysicalMaterial({
+            map: st.kit.texture(c),
+            roughness: 0.5,
+            clearcoat: 0.35,
+            clearcoatRoughness: 0.35,
+            envMapIntensity: 0.55
+          })
         );
-        mansionBase.position.y = -0.22;
-        mansionBase.receiveShadow = true;
-        scene.add(mansionBase);
+        top.position.y = 0.001;
+        top.receiveShadow = true;
+        st.root.add(top);
 
-        const goldRim = new THREE.Mesh(
-          new THREE.BoxGeometry(7.6, 0.26, 7.6),
-          new THREE.MeshStandardMaterial({ color: 0x7e22ce, roughness: 0.3, metalness: 0.55 })
-        );
-        goldRim.position.y = -0.12;
-        scene.add(goldRim);
-
-        // 6x6 マス（四隅は脱出出口テクスチャ付き）
-        const exitCorners = new Set(['0_0', '0_5', '5_0', '5_5']);
-        for (let r = 0; r < BOARD_SIZE; r++) {
-          for (let c = 0; c < BOARD_SIZE; c++) {
-            const isExit = exitCorners.has(`${r}_${c}`);
-            const isDark = (r + c) % 2 === 1;
-            let mat;
-            if (isExit) {
-              const cv = document.createElement('canvas');
-              cv.width = 256;
-              cv.height = 256;
-              const ctx = cv.getContext('2d');
-              ctx.fillStyle = r === 0 ? '#064e3b' : '#4c0519';
-              ctx.fillRect(0, 0, 256, 256);
-              ctx.strokeStyle = '#fde047';
-              ctx.lineWidth = 16;
-              ctx.strokeRect(8, 8, 240, 240);
-              ctx.fillStyle = '#fef08a';
-              ctx.font = '900 54px "Noto Sans JP", sans-serif';
-              ctx.textAlign = 'center';
-              ctx.textBaseline = 'middle';
-              ctx.fillText('🚪EXIT', 128, 95);
-              ctx.font = '900 38px "Noto Sans JP", sans-serif';
-              ctx.fillText(r === 0 ? 'P1脱出角' : 'P2脱出角', 128, 175);
-              const tex = new THREE.CanvasTexture(cv);
-              tex.anisotropy = maxAniso;
-              mat = new THREE.MeshStandardMaterial({ map: tex, roughness: 0.3 });
-            } else {
-              mat = new THREE.MeshStandardMaterial({
-                color: isDark ? 0x1e293b : 0x334155,
-                roughness: 0.42,
-                metalness: 0.12
-              });
-            }
-
-            const tile = new THREE.Mesh(new THREE.BoxGeometry(1.12, 0.12, 1.12), mat);
-            tile.position.set((c - 2.5) * 1.18, -0.04, (r - 2.5) * 1.18);
-            tile.receiveShadow = true;
-            scene.add(tile);
-          }
-        }
-
-        dynamicGroup = new THREE.Group();
-        scene.add(dynamicGroup);
-
-        // Godot 4.7 geister_ghost.glb の非同期ロード
-        if (window.THREE.GLTFLoader && window.location.protocol !== 'file:') {
-          const loader = new window.THREE.GLTFLoader();
-          loader.load('assets/models/geister_ghost.glb', (gltf) => {
-            if (gltf && gltf.scene) {
-              glbGhostTemplate = gltf.scene;
-              rebuild3DScene();
-            }
-          }, undefined, () => {});
-        }
-
-        // カメラ操作＆3Dレイキャスト
-        let isDragging = false;
-        let dragDist = 0;
-        let prevX = 0;
-        let prevY = 0;
-        const raycaster = new THREE.Raycaster();
-        const mouse = new THREE.Vector2();
-
-        const dom = renderer.domElement;
-        dom.addEventListener('pointerdown', (e) => {
-          isDragging = true;
-          dragDist = 0;
-          prevX = e.clientX;
-          prevY = e.clientY;
+        // 取ったおばけを置くフェルト
+        [-1, 1].forEach((side) => {
+          const pad = new THREE.Mesh(st.geo.slab(1.5, 4.4, 0.03, { bevel: 0.01, radius: 0.12 }), st.kit.felt(side > 0 ? '#2a2333' : '#2b2526', { repeat: 0.5 }));
+          pad.position.set(side * TRAY_X, TABLE_Y + 0.015, 0);
+          pad.receiveShadow = true;
+          st.root.add(pad);
         });
 
-        window.addEventListener('pointermove', (e) => {
-          if (isDestroyed) return;
-          if (isDragging) {
-            const dx = e.clientX - prevX;
-            const dy = e.clientY - prevY;
-            dragDist += Math.abs(dx) + Math.abs(dy);
-            prevX = e.clientX;
-            prevY = e.clientY;
-            camSpherical.theta -= dx * 0.0065;
-            camSpherical.phi = Math.max(0.2, Math.min(1.28, camSpherical.phi - dy * 0.0065));
-            updateCamera();
+        view.pieces = new THREE.Group();
+        view.moveMarks = new THREE.Group();
+        view.lastMarks = new THREE.Group();
+        st.root.add(view.lastMarks, view.moveMarks, view.pieces);
+
+        view.hoverMark = st.markers.square(0.94, '#f4ede1', 0.12);
+        view.hoverMark.position.y = 0.004;
+        view.hoverMark.visible = false;
+        st.root.add(view.hoverMark);
+
+        // 脱出の矢印 (選んだ青が角にいるときだけ出る)
+        const arrow = new THREE.Mesh(new THREE.ShapeGeometry(arrowShape(THREE), 4).rotateX(-Math.PI / 2), view.glow);
+        arrow.renderOrder = 3;
+        const pad = new THREE.Mesh(new THREE.CircleGeometry(0.5, 32).rotateX(-Math.PI / 2), st.kit.invisible());
+        view.escapeMark = new THREE.Group();
+        view.escapeMark.add(pad, arrow);
+        view.escapeMark.visible = false;
+        st.root.add(view.escapeMark);
+        st.pick(view.escapeMark, {
+          enabled: () => view.escapeMark.visible,
+          clickable: () => true,
+          onClick: () => {
+            const g = getGhostById(selectedGhostId);
+            const m = g && getValidMovesForGhost(g).find((x) => x.isEscape);
+            if (g && m && isMyTurnToMove()) executeMove(g.id, m);
           }
         });
 
-        window.addEventListener('pointerup', () => {
-          isDragging = false;
+        picker = st.gridPicker({
+          rows: BOARD_SIZE,
+          cols: BOARD_SIZE,
+          step: STEP,
+          y: 0.01,
+          enabled: () => !modalOverlayEl.classList.contains('visible'),
+          clickable: cellClickable,
+          onHover: (r, c) => showHover(r, c),
+          onLeave: () => { view.hoverMark.visible = false; },
+          onClick: handleCell
         });
 
-        dom.addEventListener('click', (e) => {
-          if (dragDist > 7) return;
-          const rect = dom.getBoundingClientRect();
-          mouse.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
-          mouse.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
-          raycaster.setFromCamera(mouse, camera);
+        const left = st.label(`${nameOf(myPlayer === 1 ? 2 : 1)}が取ったおばけ`, { className: 'gst-tray' });
+        left.at(-TRAY_X, TABLE_Y, -2.45);
+        const right = st.label('あなたが取ったおばけ', { className: 'gst-tray' });
+        right.at(TRAY_X, TABLE_Y, -2.45);
+        view.labels.push(left, right);
+      }
 
-          const hits = raycaster.intersectObjects(interactiveObjects, true);
-          if (hits.length > 0) {
-            let obj = hits[0].object;
-            while (obj && (!obj.userData || !obj.userData.onClick)) {
-              obj = obj.parent;
-            }
-            if (obj && obj.userData && obj.userData.onClick) {
-              obj.userData.onClick();
+      // ---- おばけの駒 ----
+      function ghostGeometry() {
+        return st.geo.cached('gst-ghost', () => {
+          const pts = [[0, 0], [0.27, 0], [0.3, 0.03], [0.296, 0.09], [0.274, 0.2], [0.25, 0.32], [0.24, 0.42], [0.229, 0.5], [0.202, 0.585], [0.148, 0.65], [0.078, 0.69], [0, 0.705]];
+          const g = st.geo.lathe(pts, 64);
+          // 裾を波打たせる
+          const pos = g.attributes.position;
+          for (let i = 0; i < pos.count; i++) {
+            const x = pos.getX(i);
+            const y = pos.getY(i);
+            const z = pos.getZ(i);
+            if (y < 0.1 && Math.hypot(x, z) > 0.15) {
+              const a = Math.atan2(z, x);
+              pos.setY(i, y + 0.045 * (1 - y / 0.1) * (0.5 + 0.5 * Math.cos(a * 7)));
             }
           }
+          pos.needsUpdate = true;
+          return g;
         });
-
-        dom.addEventListener('wheel', (e) => {
-          e.preventDefault();
-          camSpherical.radius = Math.max(8.5, Math.min(20.0, camSpherical.radius + e.deltaY * 0.01));
-          updateCamera();
-        }, { passive: false });
-
-        camP1Btn.onclick = () => {
-          camSpherical = { radius: 13.8, phi: 0.76, theta: 0 };
-          updateCamera();
-        };
-
-        camTopBtn.onclick = () => {
-          camSpherical = { radius: 13.2, phi: 0.22, theta: 0 };
-          updateCamera();
-        };
-
-        window.addEventListener('resize', onResize);
-        updateCamera();
-        rebuild3DScene();
-
-        const clock = new THREE.Clock();
-        function animate() {
-          if (isDestroyed) return;
-          animFrameId = requestAnimationFrame(animate);
-          const t = clock.getElapsedTime();
-          floatingGhostMeshes.forEach((item, idx) => {
-            item.mesh.position.y = item.baseY + Math.sin(t * 2.8 + idx * 0.9) * 0.045;
-          });
-          renderer.render(scene, camera);
-        }
-        animate();
       }
 
-      function updateCamera() {
-        if (!camera) return;
-        const { radius, phi, theta } = camSpherical;
-        camera.position.set(
-          radius * Math.sin(phi) * Math.sin(theta),
-          radius * Math.cos(phi),
-          radius * Math.sin(phi) * Math.cos(theta)
-        );
-        camera.lookAt(0, 0.2, 0);
+      const bodyMat = (owner) => st.kit.cached(`gst-body:${owner}`, () => new THREE.MeshPhysicalMaterial({
+        color: st.kit.color(BODY[owner]),
+        roughness: owner === 1 ? 0.42 : 0.38,
+        metalness: 0,
+        clearcoat: 0.4,
+        clearcoatRoughness: 0.3,
+        envMapIntensity: 0.8
+      }));
+      const eyeMat = () => st.kit.lacquer('#15111a', { roughness: 0.18 });
+      const markMat = (color) => st.kit.cached(`gst-mark:${color}`, () => new THREE.MeshPhysicalMaterial({
+        color: st.kit.color(COLORS[color]),
+        roughness: 0.25,
+        clearcoat: 0.8,
+        clearcoatRoughness: 0.12,
+        emissive: st.kit.color(COLORS[color]),
+        emissiveIntensity: 0.12,
+        envMapIntensity: 1
+      }));
+
+      function makeGhost(g) {
+        const obj = new THREE.Group();
+        const float = new THREE.Group();
+        const orient = new THREE.Group();
+        obj.add(float);
+        float.add(orient);
+
+        const body = new THREE.Mesh(ghostGeometry(), bodyMat(g.owner));
+        body.castShadow = true;
+        body.receiveShadow = true;
+        orient.add(body);
+
+        // 腕
+        [-1, 1].forEach((s) => {
+          const arm = new THREE.Mesh(st.geo.cached('gst-arm', () => new THREE.SphereGeometry(1, 20, 14)), bodyMat(g.owner));
+          arm.scale.set(0.075, 0.058, 0.07);
+          arm.position.set(s * 0.245, 0.36, 0.04);
+          arm.rotation.z = s * 0.5;
+          arm.castShadow = true;
+          orient.add(arm);
+        });
+        // 目 (正面 = +z)
+        [-1, 1].forEach((s) => {
+          const eye = new THREE.Mesh(st.geo.cached('gst-eye', () => new THREE.SphereGeometry(1, 16, 12)), eyeMat());
+          eye.scale.set(0.034, 0.05, 0.02);
+          eye.position.set(s * 0.075, 0.5, 0.214);
+          orient.add(eye);
+        });
+        // 背中の印 (正面の反対側)
+        const mark = new THREE.Mesh(st.geo.cached('gst-mark', () => new THREE.SphereGeometry(1, 28, 18)), markMat(g.color));
+        mark.scale.set(0.096, 0.096, 0.04);
+        mark.position.set(0, 0.42, -0.224);
+        mark.rotation.x = 0.18;
+        mark.visible = false;
+        orient.add(mark);
+
+        // 選択の輪
+        const ring = new THREE.Mesh(st.geo.cached('gst-sel-ring', () => new THREE.RingGeometry(0.36, 0.43, 48).rotateX(-Math.PI / 2)), view.glow);
+        ring.position.y = 0.006;
+        ring.renderOrder = 3;
+        ring.visible = false;
+        obj.add(ring);
+        const shadow = st.markers.contact(0.9, 0.9, 0.5);
+        shadow.position.y = 0.003;
+        obj.add(shadow);
+
+        obj.userData = { id: g.id, float, orient, mark, ring, shadow, color: g.color, lift: 0, phase: Math.random() * Math.PI * 2 };
+        view.pieces.add(obj);
+
+        st.pick(obj, {
+          enabled: () => {
+            const gg = getGhostById(g.id);
+            return !!gg && !gg.captured && !gg.escaped && !modalOverlayEl.classList.contains('visible');
+          },
+          clickable: () => {
+            const gg = getGhostById(g.id);
+            return !!gg && cellClickable(gg.r, gg.c);
+          },
+          onHover: () => {
+            const gg = getGhostById(g.id);
+            if (gg) showHover(gg.r, gg.c);
+          },
+          onLeave: () => { view.hoverMark.visible = false; },
+          onClick: () => {
+            const gg = getGhostById(g.id);
+            if (gg) handleCell(gg.r, gg.c);
+          }
+        });
+        return obj;
       }
 
-      function onResize() {
-        if (isDestroyed || !renderer || !camera) return;
-        const w = stageWrapEl.clientWidth || 960;
-        const h = stageWrapEl.clientHeight || 560;
-        camera.aspect = w / h;
-        camera.updateProjectionMatrix();
-        renderer.setSize(w, h);
+      // ---- 操作 ----
+      function cellClickable(r, c) {
+        const g = getGhostAt(r, c);
+        if (phase === 'SETUP') return !!g && g.owner === myPlayer;
+        if (!isMyTurnToMove()) return false;
+        if (g && g.owner === myPlayer) return true;
+        const sel = getGhostById(selectedGhostId);
+        return !!sel && getValidMovesForGhost(sel).some((m) => !m.isEscape && m.r === r && m.c === c);
       }
 
-      function createGhost3DObject(g, isSelected, revealIdentity) {
-        const group = new THREE.Group();
-        let bodyRoot;
-        if (glbGhostTemplate) {
-          bodyRoot = glbGhostTemplate.clone(true);
-        } else {
-          bodyRoot = new THREE.Group();
-          const bodyMat = new THREE.MeshStandardMaterial({ color: 0xf8fafc, roughness: 0.22, metalness: 0.08 });
-          const eyeMat = new THREE.MeshStandardMaterial({ color: 0x0f172a, roughness: 0.15 });
-          const cloak = new THREE.Mesh(new THREE.CylinderGeometry(0.24, 0.38, 0.58, 24), bodyMat);
-          cloak.position.y = 0.29;
-          cloak.castShadow = true;
-          bodyRoot.add(cloak);
-
-          const head = new THREE.Mesh(new THREE.SphereGeometry(0.25, 20, 16), bodyMat);
-          head.position.y = 0.6;
-          head.castShadow = true;
-          bodyRoot.add(head);
-
-          const eyeL = new THREE.Mesh(new THREE.SphereGeometry(0.045, 10, 10), eyeMat);
-          eyeL.position.set(-0.09, 0.63, -0.22);
-          bodyRoot.add(eyeL);
-          const eyeR = eyeL.clone();
-          eyeR.position.x = 0.09;
-          bodyRoot.add(eyeR);
-        }
-
-        // P2のコマは正面（手前側 +Z）を向くように180°回転
-        if (g.owner === 2) {
-          bodyRoot.rotation.y = Math.PI;
-        }
-        group.add(bodyRoot);
-
-        // 背中のマーカー宝石（自分のコマ・捕獲済みコマ・ゲーム終了時は青/赤を表示、相手生存コマは紫の秘密マーカー）
-        if (revealIdentity) {
-          const isBlue = g.color === 'blue';
-          const gemColor = isBlue ? 0x2563eb : 0xe11d48;
-          const gem = new THREE.Mesh(
-            new THREE.SphereGeometry(0.14, 16, 16),
-            new THREE.MeshStandardMaterial({
-              color: gemColor,
-              emissive: gemColor,
-              emissiveIntensity: 0.45,
-              roughness: 0.12,
-              metalness: 0.25
-            })
-          );
-          gem.position.set(0, 0.36, g.owner === 1 ? 0.24 : -0.24);
-          group.add(gem);
-
-          // 頭上の見やすいミニバッジスプライト
-          const bc = document.createElement('canvas');
-          bc.width = 128;
-          bc.height = 64;
-          const bctx = bc.getContext('2d');
-          bctx.fillStyle = isBlue ? 'rgba(37, 99, 235, 0.92)' : 'rgba(225, 29, 72, 0.92)';
-          bctx.strokeStyle = '#ffffff';
-          bctx.lineWidth = 5;
-          bctx.fillRect(6, 6, 116, 52);
-          bctx.strokeRect(6, 6, 116, 52);
-          bctx.fillStyle = '#ffffff';
-          bctx.font = '900 30px "Noto Sans JP", sans-serif';
-          bctx.textAlign = 'center';
-          bctx.textBaseline = 'middle';
-          bctx.fillText(isBlue ? '🔵善' : '🔴悪', 64, 32);
-
-          const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(bc), transparent: true }));
-          sp.scale.set(0.68, 0.34, 1);
-          sp.position.set(0, 0.96, 0);
-          group.add(sp);
-        } else {
-          // 相手の未公開コマ
-          const bc = document.createElement('canvas');
-          bc.width = 128;
-          bc.height = 64;
-          const bctx = bc.getContext('2d');
-          bctx.fillStyle = 'rgba(88, 28, 135, 0.9)';
-          bctx.strokeStyle = '#d8b4fe';
-          bctx.lineWidth = 4;
-          bctx.fillRect(6, 6, 116, 52);
-          bctx.strokeRect(6, 6, 116, 52);
-          bctx.fillStyle = '#f3e8ff';
-          bctx.font = '900 30px "Noto Sans JP", sans-serif';
-          bctx.textAlign = 'center';
-          bctx.textBaseline = 'middle';
-          bctx.fillText('❓敵', 64, 32);
-          const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(bc), transparent: true }));
-          sp.scale.set(0.64, 0.32, 1);
-          sp.position.set(0, 0.96, 0);
-          group.add(sp);
-        }
-
-        if (isSelected) {
-          const selRing = new THREE.Mesh(
-            new THREE.CylinderGeometry(0.46, 0.46, 0.08, 24),
-            new THREE.MeshBasicMaterial({ color: 0xfde047 })
-          );
-          selRing.position.y = 0.04;
-          group.add(selRing);
-        }
-
-        return group;
-      }
-
-      function rebuild3DScene() {
-        if (!THREE || !dynamicGroup) return;
-        while (dynamicGroup.children.length > 0) {
-          dynamicGroup.remove(dynamicGroup.children[0]);
-        }
-        interactiveObjects = [];
-        floatingGhostMeshes = [];
-
-        // 直前の移動ハイライト
-        if (lastMoveInfo && phase === 'PLAY') {
-          [
-            [lastMoveInfo.fromR, lastMoveInfo.fromC, 0x9333ea],
-            [lastMoveInfo.toR, lastMoveInfo.toC, 0xc084fc]
-          ].forEach(([r, c, hex]) => {
-            if (r >= 0 && r < BOARD_SIZE && c >= 0 && c < BOARD_SIZE) {
-              const hl = new THREE.Mesh(
-                new THREE.BoxGeometry(1.06, 0.04, 1.06),
-                new THREE.MeshBasicMaterial({ color: hex, transparent: true, opacity: 0.42 })
-              );
-              hl.position.set((c - 2.5) * 1.18, 0.03, (r - 2.5) * 1.18);
-              dynamicGroup.add(hl);
+      function handleCell(r, c) {
+        if (!cellClickable(r, c)) return;
+        const g = getGhostAt(r, c);
+        if (phase === 'SETUP') {
+          if (setupSwapFirstId === null) {
+            setupSwapFirstId = g.id;
+          } else if (setupSwapFirstId === g.id) {
+            setupSwapFirstId = null;
+          } else {
+            // 2体の位置を入れ替える
+            const first = getGhostById(setupSwapFirstId);
+            if (first) {
+              const fr = first.r;
+              const fc = first.c;
+              first.r = g.r;
+              first.c = g.c;
+              g.r = fr;
+              g.c = fc;
             }
-          });
+            setupSwapFirstId = null;
+          }
+          GeisterSfx.move();
+          renderAll();
+          return;
         }
+        if (g && g.owner === myPlayer) {
+          selectedGhostId = selectedGhostId === g.id ? null : g.id;
+          GeisterSfx.move();
+          renderAll();
+          return;
+        }
+        const sel = getGhostById(selectedGhostId);
+        const m = sel && getValidMovesForGhost(sel).find((x) => !x.isEscape && x.r === r && x.c === c);
+        if (m) executeMove(sel.id, m);
+      }
 
-        // 1. 盤上の生存おばけ
+      function showHover(r, c) {
+        if (!cellClickable(r, c)) {
+          view.hoverMark.visible = false;
+          return;
+        }
+        const p = cellPos(r, c);
+        view.hoverMark.position.set(p.x, 0.004, p.z);
+        view.hoverMark.visible = true;
+      }
+
+      // ---- 同期 ----
+      function trayPos(g) {
+        // 取った側の脇に、色ごとの列で並べる
+        const capturer = g.owner === 1 ? 2 : 1;
+        const side = capturer === myPlayer ? 1 : -1;
+        const sameKind = ghosts.filter((x) => x.captured && x.owner === g.owner && x.color === g.color);
+        const k = Math.max(0, sameKind.indexOf(g));
+        const col = g.color === 'blue' ? -0.33 : 0.33;
+        return { x: side * TRAY_X + col * side, y: TABLE_Y + 0.03, z: -1.5 + k * 0.82 };
+      }
+
+      function escapePos(g) {
+        const c = g.c === 0 ? -1 : 1;
+        const r = g.r <= 0 ? -1 : 1;
+        return { x: c * 3.08, y: 0, z: r * 3.08 };
+      }
+
+      function resetPieces() {
+        view.gameKey = gameSerial;
+        st.clearGroup(view.pieces);
+        view.objs.clear();
+        ghosts.forEach((g, i) => {
+          const obj = makeGhost(g);
+          const p = cellPos(g.r, g.c);
+          obj.position.set(p.x, 1.6, p.z);
+          obj.userData.home = { x: p.x, y: 0, z: p.z };
+          st.animate(obj, { position: { x: p.x, y: 0, z: p.z } }, { duration: 520, delay: 120 + i * 45, ease: 'outBounce' });
+          view.objs.set(g.id, obj);
+        });
+      }
+
+      function syncPieces() {
         ghosts.forEach((g) => {
-          if (g.captured || g.escaped) return;
-          const isSel = (phase === 'SETUP' && setupSwapFirstId === g.id) || (phase === 'PLAY' && selectedGhostId === g.id);
-          const reveal = g.owner === myPlayer || phase === 'GAME_OVER';
-          const gObj = createGhost3DObject(g, isSel, reveal);
-          gObj.position.set((g.c - 2.5) * 1.18, 0.04, (g.r - 2.5) * 1.18);
+          const obj = view.objs.get(g.id);
+          if (!obj) return;
+          const u = obj.userData;
+          const revealed = g.owner === myPlayer || g.captured || g.escaped || phase === 'GAME_OVER';
 
-          if (phase === 'SETUP' && g.owner === myPlayer) {
-            gObj.userData = {
-              onClick: () => {
-                if (setupSwapFirstId === null) {
-                  setupSwapFirstId = g.id;
-                  GeisterSfx.move();
-                } else if (setupSwapFirstId === g.id) {
-                  setupSwapFirstId = null;
-                } else {
-                  const firstG = getGhostById(setupSwapFirstId);
-                  if (firstG) {
-                    const tmpColor = firstG.color;
-                    firstG.color = g.color;
-                    g.color = tmpColor;
-                    GeisterSfx.move();
-                  }
-                  setupSwapFirstId = null;
-                }
-                renderAll();
-              }
-            };
-            interactiveObjects.push(gObj);
-          } else if (phase === 'PLAY' && turnPlayer === myPlayer && g.owner === myPlayer) {
-            gObj.userData = {
-              onClick: () => {
-                selectedGhostId = selectedGhostId === g.id ? null : g.id;
-                GeisterSfx.move();
-                renderAll();
-              }
-            };
-            interactiveObjects.push(gObj);
+          // 印の色 (並びの型を変えたとき)
+          if (u.color !== g.color) {
+            u.color = g.color;
+            u.mark.material = markMat(g.color);
+            st.animate(u.orient, { rotation: { y: u.orient.rotation.y + Math.PI * 2 } }, { duration: 520, ease: 'inOutCubic' });
           }
+          u.mark.visible = revealed;
 
-          dynamicGroup.add(gObj);
-          floatingGhostMeshes.push({ mesh: gObj, baseY: 0.04 });
-        });
+          // 向き: 盤上では相手の方を向く。取られた駒と決着後の相手の駒は、こちらに背中の印を見せる
+          const facesAway = g.owner === 1 ? myPlayer === 1 : myPlayer === 2;
+          let yaw = facesAway ? Math.PI : 0;
+          if (g.captured || (phase === 'GAME_OVER' && g.owner !== myPlayer)) yaw = Math.PI;
+          if (myPlayer === 2) yaw += Math.PI;
+          const curYaw = u.orient.userData.yaw ?? null;
+          if (curYaw === null) {
+            u.orient.rotation.y = yaw;
+          } else if (Math.abs(curYaw - yaw) > 0.001) {
+            st.animate(u.orient, { rotation: { y: u.orient.rotation.y + (yaw - curYaw) } }, { duration: 620, delay: g.captured ? 380 : 0, ease: 'inOutCubic' });
+          }
+          u.orient.userData.yaw = yaw;
 
-        // 2. 選択中のおばけの移動可能先ターゲットマーカー（脱出マーカー含む）
-        if (phase === 'PLAY' && turnPlayer === myPlayer && selectedGhostId !== null) {
-          const selG = getGhostById(selectedGhostId);
-          const validMoves = getValidMovesForGhost(selG);
+          // 位置
+          let to;
+          let arc = 0.28;
+          let scale = 1;
+          if (g.captured) {
+            to = trayPos(g);
+            arc = 1.4;
+            scale = 0.82;
+          } else if (g.escaped) {
+            to = escapePos(g);
+            arc = 0.9;
+          } else {
+            const p = cellPos(g.r, g.c);
+            to = { x: p.x, y: 0, z: p.z };
+            if (phase === 'SETUP') arc = 0.6;
+          }
+          const h = u.home;
+          if (!h || Math.abs(h.x - to.x) > 1e-4 || Math.abs(h.z - to.z) > 1e-4 || Math.abs(h.y - to.y) > 1e-4) {
+            u.home = to;
+            st.animate(obj, { position: to, scale }, { duration: g.captured ? 760 : 460, delay: g.captured ? 180 : 0, arc, ease: 'inOutCubic' });
+          }
+          u.shadow.visible = !g.captured;
 
-          validMoves.forEach((m) => {
-            if (m.isEscape) {
-              // 盤外への脱出勝利ポータル
-              const portal = new THREE.Mesh(
-                new THREE.CylinderGeometry(0.55, 0.55, 0.18, 24),
-                new THREE.MeshBasicMaterial({ color: 0x10b981 })
-              );
-              portal.position.set((m.c - 2.5) * 1.18, 0.12, (m.r - 2.5) * 1.18);
-              portal.userData = { onClick: () => executeMove(selG.id, m) };
-              dynamicGroup.add(portal);
-              interactiveObjects.push(portal);
-            } else {
-              const isCapture = m.targetGhost !== null;
-              const marker = new THREE.Mesh(
-                new THREE.CylinderGeometry(0.42, 0.42, 0.14, 24),
-                new THREE.MeshBasicMaterial({
-                  color: isCapture ? 0xf43f5e : 0x38bdf8,
-                  transparent: true,
-                  opacity: 0.85
-                })
-              );
-              marker.position.set((m.c - 2.5) * 1.18, isCapture ? 0.88 : 0.1, (m.r - 2.5) * 1.18);
-              marker.userData = { onClick: () => executeMove(selG.id, m) };
-              dynamicGroup.add(marker);
-              interactiveObjects.push(marker);
-            }
-          });
-        }
-
-        // 3. 左右の盤外に「捕獲されたおばけ」を並べて正体を公開表示
-        const capturedP1 = ghosts.filter((g) => g.owner === 1 && g.captured);
-        capturedP1.forEach((g, idx) => {
-          const obj = createGhost3DObject(g, false, true);
-          obj.scale.set(0.75, 0.75, 0.75);
-          obj.position.set(-4.65, 0.04, -2.4 + idx * 0.75);
-          dynamicGroup.add(obj);
-        });
-
-        const capturedP2 = ghosts.filter((g) => g.owner === 2 && g.captured);
-        capturedP2.forEach((g, idx) => {
-          const obj = createGhost3DObject(g, false, true);
-          obj.scale.set(0.75, 0.75, 0.75);
-          obj.position.set(4.65, 0.04, -2.4 + idx * 0.75);
-          dynamicGroup.add(obj);
+          // 選択
+          const sel = (phase === 'SETUP' && setupSwapFirstId === g.id) || (phase === 'PLAY' && selectedGhostId === g.id);
+          u.ring.visible = sel;
+          u.lift = sel ? 0.16 : 0;
         });
       }
 
+      function syncMarks() {
+        st.clearGroup(view.moveMarks);
+        st.clearGroup(view.lastMarks);
+        view.escapeMark.visible = false;
+
+        if (lastMoveInfo && phase !== 'SETUP') {
+          [[lastMoveInfo.fromR, lastMoveInfo.fromC, 0.07], [lastMoveInfo.toR, lastMoveInfo.toC, 0.14]].forEach(([r, c, o]) => {
+            if (r < 0 || r >= BOARD_SIZE) return;
+            const m = st.markers.square(0.96, '#e2b867', o);
+            const p = cellPos(r, c);
+            m.position.set(p.x, 0.003, p.z);
+            view.lastMarks.add(m);
+          });
+        }
+
+        const sel = isMyTurnToMove() ? getGhostById(selectedGhostId) : null;
+        if (!sel) return;
+        getValidMovesForGhost(sel).forEach((m) => {
+          if (m.isEscape) {
+            const pos = escapePos(sel);
+            const ang = Math.atan2(pos.z, pos.x);
+            view.escapeMark.position.set(pos.x, 0.012, pos.z);
+            view.escapeMark.rotation.y = -ang;
+            view.escapeMark.visible = true;
+            return;
+          }
+          const p = cellPos(m.r, m.c);
+          const mk = m.targetGhost ? st.markers.ring(0.38, 0.45, '#d9705f', 0.85) : st.markers.dot(0.12, '#f4ede1', 0.55);
+          mk.position.set(p.x, 0.008, p.z);
+          view.moveMarks.add(mk);
+        });
+      }
+
+      function syncTable() {
+        if (!st) return;
+        if (view.gameKey !== gameSerial) resetPieces();
+        syncPieces();
+        syncMarks();
+        st.refreshHover();
+      }
+
+      function initStage(threeLib) {
+        THREE = threeLib;
+        st = B3D.createStage(THREE, stageWrapEl, {
+          embed: true,
+          radius: 11.8,
+          phi: 0.7,
+          theta: myPlayer === 2 ? Math.PI : 0,
+          extent: 6,
+          tableY: TABLE_Y,
+          tableWood: 'darkWalnut',
+          minRadius: 6.5,
+          maxRadius: 20,
+          maxPhi: 1.2,
+          keyIntensity: 1.7,
+          onFrame(now) {
+            if (view.glow) view.glow.opacity = 0.55 + 0.35 * (0.5 + 0.5 * Math.sin(now / 260));
+            // おばけはゆっくり漂う
+            view.objs.forEach((obj) => {
+              const u = obj.userData;
+              const gg = getGhostById(u.id);
+              const still = gg && gg.captured;
+              const bob = still ? 0 : Math.sin(now / 700 + u.phase) * 0.025 + 0.02;
+              u.float.position.y += (u.lift + bob - u.float.position.y) * 0.18;
+            });
+          }
+        });
+        view.glow = st.kit.cached('gst-glow', () => new THREE.MeshBasicMaterial({
+          color: st.kit.color('#e2b867'), transparent: true, opacity: 0.7, depthWrite: false, toneMapped: false
+        }));
+        buildBoard();
+        B3D.current = st;
+        syncTable();
+      }
+
       // ====================================================
-      // 4. UIレンダリング
+      // 4. 操作パネル
       // ====================================================
+      function track(label, color, n) {
+        return `<span class="gst-track" style="--t:${color}"><span>${label}</span>${[0, 1, 2, 3].map((i) => `<i class="${i < n ? 'on' : ''}"></i>`).join('')}</span>`;
+      }
+
       function renderAll() {
-        const p1BlueLost = ghosts.filter((g) => g.owner === 1 && g.color === 'blue' && g.captured).length;
-        const p1RedLost = ghosts.filter((g) => g.owner === 1 && g.color === 'red' && g.captured).length;
-        const p2BlueLost = ghosts.filter((g) => g.owner === 2 && g.color === 'blue' && g.captured).length;
-        const p2RedLost = ghosts.filter((g) => g.owner === 2 && g.color === 'red' && g.captured).length;
+        const opp = myPlayer === 1 ? 2 : 1;
+        const lost = (owner, color) => ghosts.filter((g) => g.owner === owner && g.color === color && g.captured).length;
 
-        scoreCardsEl.innerHTML = `
-          <div class="gst-pcard ${turnPlayer === 1 && phase === 'PLAY' ? 'active-turn' : ''}">
-            <span style="font-weight:900;color:#38bdf8;">${turnPlayer === 1 && phase === 'PLAY' ? '▶ ' : ''}あなた (P1)</span>
-            <span class="gst-pill-blue" title="4体取ると勝利">捕獲した敵の🔵青: ${p2BlueLost}/4</span>
-            <span class="gst-pill-red" title="4体取らせるとブラフ勝利！">取らせた自分の🔴赤: ${p1RedLost}/4</span>
-          </div>
-          <div class="gst-pcard ${turnPlayer === 2 && phase === 'PLAY' ? 'active-turn' : ''}">
-            <span style="font-weight:900;color:#f43f5e;">${turnPlayer === 2 && phase === 'PLAY' ? '▶ ' : ''}相手 (P2 CPU)</span>
-            <span class="gst-pill-blue">捕獲したP1の🔵青: ${p1BlueLost}/4</span>
-            <span class="gst-pill-red">取らせたP2の🔴赤: ${p2RedLost}/4</span>
-          </div>
-        `;
+        playersRowEl.innerHTML = [myPlayer, opp].map((p) => {
+          const other = p === 1 ? 2 : 1;
+          const isTurn = turnPlayer === p && phase === 'PLAY';
+          return `
+            <div class="gst-player ${isTurn ? 'is-turn' : ''}">
+              <span class="gst-swatch" style="--c:${BODY[p]}"></span>
+              <div>
+                <div class="gst-player-name">${nameOf(p)}</div>
+                <div class="gst-player-sub">
+                  <span title="相手の青を4体取ると勝ち">${track('取った青', COLORS.blue, lost(other, 'blue'))}</span>
+                  <span title="自分の赤を4体取らせると勝ち">${track('取らせた赤', COLORS.red, lost(p, 'red'))}</span>
+                </div>
+              </div>
+            </div>
+          `;
+        }).join('');
 
-        bannerEl.textContent = bannerText;
+        phaseEl.textContent = phase === 'SETUP' ? '配置' : phase === 'PLAY' ? `${nameOf(turnPlayer)}の手番` : '決着';
+        announceEl.textContent = bannerText;
 
         if (phase === 'SETUP') {
-          bottomDockEl.innerHTML = `
-            <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
-              <span style="font-size:12px;font-weight:900;color:#e9d5ff;">🛠️ 初期陣形プリセット:</span>
-              <button class="gst-btn" id="gst-form-rand">🎲 ランダム配置</button>
-              <button class="gst-btn" id="gst-form-red">⚔️ 前衛🔴赤ブラフ陣形</button>
-              <button class="gst-btn" id="gst-form-blue">🏃 前衛🔵青速攻陣形</button>
+          dockEl.innerHTML = `
+            <div class="gst-dock-info">
+              <span class="gst-dock-label">並びの型</span>
+              <div class="gst-controls">
+                <button class="gst-btn" data-form="random">ランダム</button>
+                <button class="gst-btn" data-form="front_red">赤を前に</button>
+                <button class="gst-btn" data-form="front_blue">青を前に</button>
+              </div>
             </div>
-            <button class="gst-btn gst-btn-emerald" id="gst-start-match" style="font-size:14px;padding:7px 20px;">
-              🚀 配置完了して対局開始！
-            </button>
+            <div class="gst-actions">
+              <button class="gst-btn is-primary" id="gst-start-match">この配置で始める</button>
+            </div>
           `;
-          bottomDockEl.querySelector('#gst-form-rand').onclick = () => initGame('random');
-          bottomDockEl.querySelector('#gst-form-red').onclick = () => initGame('front_red');
-          bottomDockEl.querySelector('#gst-form-blue').onclick = () => initGame('front_blue');
-          bottomDockEl.querySelector('#gst-start-match').onclick = () => {
+          dockEl.querySelectorAll('[data-form]').forEach((b) => {
+            b.onclick = () => initGame(b.getAttribute('data-form'), true);
+          });
+          dockEl.querySelector('#gst-start-match').onclick = () => {
             phase = 'PLAY';
             setupSwapFirstId = null;
             GeisterSfx.move();
-            bannerText = '⚔️ 対局開始！あなたの手番です。動かす自分のおばけをクリックしてください。';
+            bannerText = turnPlayer === myPlayer ? 'あなたの手番です。動かすおばけを選んでください。' : `${nameOf(turnPlayer)}の手番です。`;
             renderAll();
+            if (vsCpu && turnPlayer !== myPlayer) cpuTimer = setTimeout(runCpuTurn, 900);
           };
         } else if (phase === 'PLAY') {
           const selG = selectedGhostId ? getGhostById(selectedGhostId) : null;
           const escapeMove = selG ? getValidMovesForGhost(selG).find((m) => m.isEscape) : null;
-
-          bottomDockEl.innerHTML = `
-            <div style="font-size:12px;color:#cbd5e1;">
-              💡 <b>勝利条件</b>：①敵の🔵青を4体取る ／ ②自分の🔴赤を4体取らせる ／ ③敵陣の角(🚪EXIT)から自分の🔵青を脱出させる
+          const mine = isMyTurnToMove();
+          dockEl.innerHTML = `
+            <div class="gst-dock-info">
+              <span class="gst-dock-label">勝ち方</span>
+              <div class="gst-rules">
+                <span><b>脱出</b> 青を敵陣の角から外へ出す</span>
+                <span><b>青を取る</b> 相手の青を4体取る</span>
+                <span><b>赤を取らせる</b> 自分の赤を4体取らせる</span>
+              </div>
             </div>
-            <div style="display:flex;gap:8px;align-items:center;">
-              ${escapeMove ? `<button class="gst-btn gst-btn-emerald" id="gst-escape-btn" style="font-size:14px;">🚪 出口から盤外へ脱出して勝利！</button>` : ''}
-              <span style="font-size:12px;font-weight:900;color:#c084fc;">
-                ${turnPlayer === myPlayer ? '👆 自分のおばけをクリック ➔ 移動先マーカーをクリック' : '⏳ 相手が思考中...'}
-              </span>
+            <div class="gst-actions">
+              ${escapeMove && mine ? '<button class="gst-btn is-primary" id="gst-escape-btn">出口から抜け出す</button>' : ''}
+              ${mine
+                ? `<span class="gst-prompt">${selG ? '動かす先を選んでください' : '動かすおばけを選んでください'}</span>`
+                : `<span class="gst-wait">${nameOf(turnPlayer)}が考えています</span>`}
             </div>
           `;
-          const escBtn = bottomDockEl.querySelector('#gst-escape-btn');
-          if (escBtn && escapeMove && selG) {
-            escBtn.onclick = () => executeMove(selG.id, escapeMove);
-          }
+          const escBtn = dockEl.querySelector('#gst-escape-btn');
+          if (escBtn) escBtn.onclick = () => executeMove(selG.id, escapeMove);
         } else {
-          bottomDockEl.innerHTML = `
-            <span style="font-size:13px;font-weight:900;color:#fde047;">🏆 ${winReasonText}</span>
-            <button class="gst-btn gst-btn-primary" id="gst-dock-rematch">🔄 もう一度プレイする</button>
+          dockEl.innerHTML = `
+            <div class="gst-dock-info">
+              <span class="gst-dock-label">${winnerPlayer === myPlayer ? 'あなたの勝ち' : 'あなたの負け'}</span>
+              <span class="gst-announce" style="margin:0">${winReasonText}</span>
+            </div>
+            <div class="gst-actions">
+              <button class="gst-btn is-primary" id="gst-dock-rematch">もう一度遊ぶ</button>
+            </div>
           `;
-          bottomDockEl.querySelector('#gst-dock-rematch').onclick = () => initGame('random');
+          dockEl.querySelector('#gst-dock-rematch').onclick = () => initGame('random');
         }
 
-        rebuild3DScene();
+        syncTable();
       }
 
       aiSelEl.onchange = () => { aiDifficulty = aiSelEl.value; };
       newBtnEl.onclick = () => initGame('random');
 
-      ensureThreeLoaded().then((threeLib) => {
-        if (isDestroyed) return;
-        init3DStage(threeLib);
-        initGame('random');
+      initGame('random');
+      B3D.ensureThree().then((threeLib) => {
+        if (isDestroyed || !threeLib) return;
+        initStage(threeLib);
       });
 
       return () => {
         isDestroyed = true;
         if (cpuTimer) clearTimeout(cpuTimer);
-        if (animFrameId) cancelAnimationFrame(animFrameId);
-        window.removeEventListener('resize', onResize);
-        if (renderer) renderer.dispose();
+        if (st) {
+          if (B3D.current === st) B3D.current = null;
+          st.destroy();
+          st = null;
+        }
       };
     }
   });
