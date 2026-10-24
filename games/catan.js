@@ -1,38 +1,30 @@
 /**
- * 🏝️ 3D カタンの開拓者たち (Die Siedler von Catan) - AAA フル3Dジオラマ＆公式完全ルール版
- * Board Arena Plugin (Godot 4.7 GLB + Three.js High-Resolution 3D WebGL)
+ * カタンの開拓者たち (3〜4人)
+ * サイコロで資源を産出し、街道・開拓地・都市を築いて先に10点を取ったプレイヤーの勝ち。
  *
- * 🌟 AAA 特徴:
- * 1. 【公式カタン完全ルール実装 (3人/4人対戦・賢い交渉＆開拓AI・P2P対応)】
- *    - 19枚の地形ヘックス（森4・丘3・牧場4・畑4・山3・砂漠1）＋ 18枚の数字チップ（確率ドット＆6/8赤字表示）
- *    - 54箇所の交差点（頂点）と72本の辺（街道）、9箇所の貿易港（3:1一般港×4、2:1専門港×5）を完全グラフ化
- *    - スネークドラフト初期配置（1巡目順方向 → 2巡目逆順＆初期資源獲得）＋「⚡ワンクリック即開幕配置」も対応
- *    - ダイス2個による資源産出、出目「7」のバースト（8枚以上半減）＆盗賊移動＋資源強奪
- *    - 建設（街道・開拓地[距離ルール厳守]・都市化）＆ 発展カード全25枚（騎士14・VP5・街道建設2・発見2・独占2）
- *    - 港レート自動反映の海上貿易（4:1 / 3:1 / 2:1）＆ AIが損得計算して応じるプレイヤー間資源交渉！
- *    - DFS探索による「🛣️最長交易路 (5本以上・2VP)」＆「⚔️最大騎士力 (3枚以上・2VP)」自動判定、10VP先取完全勝利！
- * 2. 【Godot 4.7 GLBモデル ＋ 立体3D島ジオラマ】
- *    - 森林の針葉樹、山地の岩峰、丘陵のレンガ山、牧草地、黄金の麦畑、砂漠のピラミッドとオアシスを3D立体造形！
- *    - 建設可能な頂点・街道・盗賊移動先が3D盤面上で発光ハイライトされ、直接クリックで直感的に建設可能！
+ * - 公式ルール: 19枚の地形タイルと18枚の数字チップ、9つの港、初期配置のスネークドラフト、
+ *   7の目の盗賊とバースト、発展カード25枚、最長交易路・最大騎士力
+ * - 盤面は共通エンジン (arena-3d-engine.js) の卓上ステージに、厚みのあるタイルと木の駒で組み立てる
  */
 
 (function () {
   const RES_TYPES = ['wood', 'brick', 'sheep', 'wheat', 'ore'];
 
   const RES_META = {
-    wood:  { id: 'wood',  name: '木材', short: '木', icon: '🌲', css: '#15803d', lightCss: '#dcfce7', hex: 0x15803d, terrainName: '森林' },
-    brick: { id: 'brick', name: 'レンガ', short: '土', icon: '🧱', css: '#b91c1c', lightCss: '#fee2e2', hex: 0xb91c1c, terrainName: '丘陵' },
-    sheep: { id: 'sheep', name: '羊毛', short: '羊', icon: '🐑', css: '#65a30d', lightCss: '#ecfccb', hex: 0x84cc16, terrainName: '牧草地' },
-    wheat: { id: 'wheat', name: '小麦', short: '麦', icon: '🌾', css: '#d97706', lightCss: '#fef3c7', hex: 0xeab308, terrainName: '畑' },
-    ore:   { id: 'ore',   name: '鉱石', short: '鉄', icon: '⛰️', css: '#475569', lightCss: '#f1f5f9', hex: 0x64748b, terrainName: '山地' },
-    desert:{ id: 'desert',name: '砂漠', short: '砂', icon: '🏜️', css: '#ca8a04', lightCss: '#fef9c3', hex: 0xd4a359, terrainName: '砂漠' }
+    wood:   { name: '木材',   terrain: '森林',   color: '#4f7a45' },
+    brick:  { name: 'レンガ', terrain: '丘陵',   color: '#b0603f' },
+    sheep:  { name: '羊毛',   terrain: '牧草地', color: '#9dbb63' },
+    wheat:  { name: '小麦',   terrain: '畑',     color: '#d8ae4f' },
+    ore:    { name: '鉱石',   terrain: '山地',   color: '#8a9098' },
+    desert: { name: '砂漠',   terrain: '砂漠',   color: '#cdb27c' }
   };
 
+  // 駒の色は実物と同じ赤・青・白・橙
   const PLAYER_THEMES = [
-    { name: 'あなた (赤)', css: '#ef4444', hex: 0xef4444, darkHex: 0x991b1b },
-    { name: 'CPU 2 (青)', css: '#3b82f6', hex: 0x3b82f6, darkHex: 0x1d4ed8 },
-    { name: 'CPU 3 (白)', css: '#f8fafc', hex: 0xf8fafc, darkHex: 0x94a3b8 },
-    { name: 'CPU 4 (橙)', css: '#f97316', hex: 0xf97316, darkHex: 0xc2410c }
+    { colorName: '赤', color: '#b5392c' },
+    { colorName: '青', color: '#2f5f9e' },
+    { colorName: '白', color: '#e4ddcd' },
+    { colorName: '橙', color: '#d5772b' }
   ];
 
   // 公式タイル構成 (19枚) & 数字チップ構成 (18枚)
@@ -57,11 +49,18 @@
   ];
 
   const DEV_CARD_META = {
-    knight:         { name: '⚔️ 騎士 (Knight)', desc: '盗賊を別のタイルへ移動し、隣接プレイヤーから資源を1枚奪う（3枚で最大騎士力2VP）' },
-    vp:             { name: '🏛️ 発展ポイント (+1VP)', desc: '大聖堂・図書館・市場などの建設により即座に勝利ポイント+1VP！' },
-    road_building:  { name: '🛣️ 街道建設', desc: 'コストなしで自分の街道を2本まで即座に建設できる！' },
-    year_of_plenty: { name: '🎁 発見 (Year of Plenty)', desc: '銀行から好きな資源カードを合計2枚すぐさま獲得できる！' },
-    monopoly:       { name: '👑 独占 (Monopoly)', desc: '資源を1種類宣言し、他全員が持つその資源をすべて回収する！' }
+    knight:         { name: '騎士',     desc: '盗賊を別のタイルへ動かし、隣のプレイヤーから資源を1枚奪う。3枚以上で最大騎士力の候補になる。' },
+    vp:             { name: '勝利点',   desc: '引いた時点で1点。' },
+    road_building:  { name: '街道建設', desc: '費用なしで街道を2本置く。' },
+    year_of_plenty: { name: '発見',     desc: '好きな資源を2枚もらう。' },
+    monopoly:       { name: '独占',     desc: '資源を1種類指定し、他の全員が持つその資源をすべてもらう。' }
+  };
+
+  const BUILD_COST = {
+    road: ['wood', 'brick'],
+    settlement: ['wood', 'brick', 'sheep', 'wheat'],
+    city: ['wheat', 'wheat', 'ore', 'ore', 'ore'],
+    dev: ['sheep', 'wheat', 'ore']
   };
 
   // Web Audio サウンドエフェクト
@@ -116,18 +115,253 @@
     return a;
   }
 
+  function rgba(hex, a) {
+    const n = parseInt(hex.slice(1), 16);
+    return `rgba(${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255}, ${a})`;
+  }
+
+  const costDots = (key) => `<span class="cat-cost">${BUILD_COST[key].map((r) => `<i style="--c:${RES_META[r].color}"></i>`).join('')}</span>`;
+  const costText = (key) => {
+    const counts = {};
+    BUILD_COST[key].forEach((r) => { counts[r] = (counts[r] || 0) + 1; });
+    return Object.entries(counts).map(([r, n]) => `${RES_META[r].name}${n}`).join('・');
+  };
+
+  // ====================================================
+  // 地形・海・チップの手描きテクスチャ
+  // ====================================================
+  const TERRAIN_PAINT = {
+    wood: {
+      base: '#3a5a32', dark: '#24391f', light: '#56763f', side: '#2c4427', seed: 11,
+      detail(ctx, w, h, rng) {
+        // 下草と落ち葉
+        for (let i = 0; i < 1400; i++) {
+          ctx.fillStyle = rng() < 0.6 ? 'rgba(25, 40, 22, 0.35)' : 'rgba(110, 140, 70, 0.25)';
+          ctx.beginPath();
+          ctx.arc(rng() * w, rng() * h, 1 + rng() * 3.2, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
+    },
+    brick: {
+      base: '#9b5737', dark: '#6e3822', light: '#c27a52', side: '#6b3a24', seed: 23,
+      detail(ctx, w, h, rng) {
+        // 掘り跡のくぼみと土くれ
+        for (let i = 0; i < 14; i++) {
+          const x = rng() * w;
+          const y = rng() * h;
+          const rx = 14 + rng() * 26;
+          const ry = rx * (0.5 + rng() * 0.3);
+          const g = ctx.createRadialGradient(x, y - ry * 0.3, 0, x, y, rx);
+          g.addColorStop(0, 'rgba(70, 30, 16, 0.45)');
+          g.addColorStop(0.7, 'rgba(90, 40, 20, 0.25)');
+          g.addColorStop(1, 'rgba(210, 150, 110, 0)');
+          ctx.fillStyle = g;
+          ctx.beginPath();
+          ctx.ellipse(x, y, rx, ry, rng() * Math.PI, 0, Math.PI * 2);
+          ctx.fill();
+        }
+        for (let i = 0; i < 1100; i++) {
+          ctx.fillStyle = rng() < 0.55 ? 'rgba(85, 40, 22, 0.35)' : 'rgba(220, 160, 120, 0.3)';
+          ctx.beginPath();
+          ctx.ellipse(rng() * w, rng() * h, 1 + rng() * 3, 0.8 + rng() * 2, rng() * Math.PI, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
+    },
+    sheep: {
+      base: '#7e9f4f', dark: '#5b7a36', light: '#a6c46b', side: '#566f33', seed: 37,
+      detail(ctx, w, h, rng) {
+        // 草の葉先
+        ctx.lineCap = 'round';
+        for (let i = 0; i < 3200; i++) {
+          const x = rng() * w;
+          const y = rng() * h;
+          const l = 3 + rng() * 6;
+          ctx.strokeStyle = rng() < 0.5 ? 'rgba(60, 90, 35, 0.32)' : 'rgba(190, 215, 130, 0.26)';
+          ctx.lineWidth = 1;
+          ctx.beginPath();
+          ctx.moveTo(x, y);
+          ctx.lineTo(x + (rng() - 0.5) * 3, y - l);
+          ctx.stroke();
+        }
+      }
+    },
+    wheat: {
+      base: '#bf8f34', dark: '#966b24', light: '#dcb35a', side: '#8a6624', seed: 41,
+      detail(ctx, w, h, rng) {
+        // 畝の列
+        ctx.save();
+        ctx.translate(w / 2, h / 2);
+        ctx.rotate(-0.42);
+        for (let y = -h; y < h; y += 15) {
+          ctx.fillStyle = 'rgba(150, 110, 40, 0.22)';
+          ctx.fillRect(-w, y, w * 2, 5);
+          ctx.fillStyle = 'rgba(245, 220, 140, 0.14)';
+          ctx.fillRect(-w, y + 7, w * 2, 3);
+        }
+        ctx.restore();
+        for (let i = 0; i < 1600; i++) {
+          ctx.fillStyle = rng() < 0.5 ? 'rgba(140, 100, 35, 0.25)' : 'rgba(250, 230, 160, 0.22)';
+          ctx.fillRect(rng() * w, rng() * h, 1.2, 2 + rng() * 3);
+        }
+      }
+    },
+    ore: {
+      base: '#6c7075', dark: '#45484c', light: '#93979b', side: '#4a4d51', seed: 53,
+      detail(ctx, w, h, rng) {
+        // 岩肌のひび
+        ctx.lineCap = 'round';
+        for (let i = 0; i < 60; i++) {
+          let x = rng() * w;
+          let y = rng() * h;
+          ctx.strokeStyle = 'rgba(30, 32, 36, 0.38)';
+          ctx.lineWidth = 0.8 + rng() * 1.6;
+          ctx.beginPath();
+          ctx.moveTo(x, y);
+          for (let k = 0; k < 5; k++) {
+            x += (rng() - 0.5) * 44;
+            y += (rng() - 0.5) * 44;
+            ctx.lineTo(x, y);
+          }
+          ctx.stroke();
+        }
+        for (let i = 0; i < 500; i++) {
+          ctx.fillStyle = rng() < 0.5 ? 'rgba(200, 204, 208, 0.25)' : 'rgba(35, 38, 42, 0.3)';
+          ctx.fillRect(rng() * w, rng() * h, 1 + rng() * 3, 1 + rng() * 3);
+        }
+      }
+    },
+    desert: {
+      base: '#cdae72', dark: '#a98a55', light: '#e2c690', side: '#9c7f4e', seed: 67,
+      detail(ctx, w, h, rng) {
+        // 風紋
+        for (let i = 0; i < 34; i++) {
+          const y0 = (i / 34) * h + (rng() - 0.5) * 10;
+          ctx.strokeStyle = i % 2 ? 'rgba(160, 128, 80, 0.3)' : 'rgba(250, 236, 200, 0.32)';
+          ctx.lineWidth = 1.5 + rng() * 2;
+          ctx.beginPath();
+          for (let x = -10; x <= w + 10; x += 8) {
+            const y = y0 + Math.sin(x * 0.018 + i) * 9 + Math.sin(x * 0.051 + i * 2.1) * 3;
+            if (x === -10) ctx.moveTo(x, y);
+            else ctx.lineTo(x, y);
+          }
+          ctx.stroke();
+        }
+      }
+    }
+  };
+
+  function terrainCanvas(B3D, terrain) {
+    const P = TERRAIN_PAINT[terrain];
+    return B3D.canvas.cached(`cat-terrain:${terrain}`, 512, 512, (ctx, w, h) => {
+      const rng = B3D.mulberry32(P.seed);
+      B3D.canvas.paintNoise(ctx, w, h, P.base, 18, P.seed, 0);
+      for (let i = 0; i < 80; i++) {
+        const x = rng() * w;
+        const y = rng() * h;
+        const r = 12 + rng() * 46;
+        const g = ctx.createRadialGradient(x, y, 0, x, y, r);
+        const c = rng() < 0.5 ? P.dark : P.light;
+        g.addColorStop(0, rgba(c, 0.32));
+        g.addColorStop(1, rgba(c, 0));
+        ctx.fillStyle = g;
+        ctx.fillRect(x - r, y - r, r * 2, r * 2);
+      }
+      P.detail(ctx, w, h, rng);
+      // 縁に向かって少し沈ませる
+      const v = ctx.createRadialGradient(w / 2, h / 2, w * 0.18, w / 2, h / 2, w * 0.5);
+      v.addColorStop(0, 'rgba(0, 0, 0, 0)');
+      v.addColorStop(1, 'rgba(0, 0, 0, 0.22)');
+      ctx.fillStyle = v;
+      ctx.fillRect(0, 0, w, h);
+    });
+  }
+
+  function seaCanvas(B3D) {
+    return B3D.canvas.cached('cat-sea', 1024, 1024, (ctx, w, h) => {
+      const g = ctx.createRadialGradient(w / 2, h / 2, w * 0.2, w / 2, h / 2, w * 0.5);
+      g.addColorStop(0, '#2a5f70');
+      g.addColorStop(0.72, '#214f60');
+      g.addColorStop(1, '#163a48');
+      ctx.fillStyle = g;
+      ctx.fillRect(0, 0, w, h);
+      const rng = B3D.mulberry32(97);
+      const img = ctx.getImageData(0, 0, w, h);
+      for (let i = 0; i < img.data.length; i += 4) {
+        const n = (rng() - 0.5) * 9;
+        img.data[i] += n;
+        img.data[i + 1] += n;
+        img.data[i + 2] += n;
+      }
+      ctx.putImageData(img, 0, 0);
+      // 細かい波
+      ctx.lineCap = 'round';
+      for (let i = 0; i < 900; i++) {
+        const x = rng() * w;
+        const y = rng() * h;
+        const l = 8 + rng() * 22;
+        ctx.strokeStyle = rng() < 0.7 ? 'rgba(170, 215, 228, 0.16)' : 'rgba(10, 35, 48, 0.28)';
+        ctx.lineWidth = 1 + rng() * 1.5;
+        ctx.beginPath();
+        ctx.moveTo(x, y);
+        ctx.quadraticCurveTo(x + l / 2, y - 3 - rng() * 3, x + l, y);
+        ctx.stroke();
+      }
+    });
+  }
+
+  function tokenCanvas(B3D, num) {
+    return B3D.canvas.cached(`cat-token:${num}`, 256, 256, (ctx, w, h) => {
+      B3D.canvas.paintNoise(ctx, w, h, '#ebdfc1', 9, 300 + num, 160);
+      ctx.strokeStyle = 'rgba(110, 86, 56, 0.55)';
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.arc(w / 2, h / 2, w * 0.43, 0, Math.PI * 2);
+      ctx.stroke();
+      const hot = num === 6 || num === 8;
+      ctx.fillStyle = hot ? '#a3342a' : '#2b2119';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.font = `400 ${hot ? 118 : 108}px "Marcellus", Georgia, "Times New Roman", serif`;
+      ctx.fillText(String(num), w / 2, h * 0.45);
+      const pips = 6 - Math.abs(7 - num);
+      const gap = 17;
+      for (let i = 0; i < pips; i++) {
+        ctx.beginPath();
+        ctx.arc(w / 2 + (i - (pips - 1) / 2) * gap, h * 0.76, 5.5, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    });
+  }
+
+  function harborCanvas(B3D, ratio, res) {
+    return B3D.canvas.cached(`cat-harbor:${ratio}:${res || 'any'}`, 256, 256, (ctx, w, h) => {
+      B3D.canvas.paintNoise(ctx, w, h, '#e8dbbd', 9, 500 + ratio, 160);
+      ctx.strokeStyle = res ? RES_META[res].color : '#6d5b45';
+      ctx.lineWidth = 20;
+      ctx.beginPath();
+      ctx.arc(w / 2, h / 2, w * 0.4, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.fillStyle = '#2b2119';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.font = '400 84px "Marcellus", Georgia, "Times New Roman", serif';
+      ctx.fillText(`${ratio}:1`, w / 2, h / 2 + 4);
+    });
+  }
+
   window.BoardArena.registerGame({
     id: 'catan',
-    name: '3D カタンの開拓者たち (Catan)',
-    icon: '🏝️',
-    category: '👑 開拓・交渉・拡大再生産 (AAA 3D)',
+    name: 'カタンの開拓者たち',
+    icon: '',
+    category: '開拓・交渉',
     minPlayers: 3,
     maxPlayers: 4,
-    description: 'サイコロで資源を産出し、街道・開拓地・都市を築き、港貿易や交渉を駆使して10勝利ポイントを目指す世界最高峰のボードゲーム！完全3Dジオラマ＆公式フルルール搭載。',
+    description: 'サイコロで資源を産出し、街道・開拓地・都市を築きながら、港や交渉も使って10点を目指す。',
 
     mount(container, bridge) {
       let isDestroyed = false;
-      let animFrameId = null;
       let cpuTimer = null;
 
       let playerCount = 4;
@@ -154,273 +388,419 @@
       let buildMode = null;    // null | 'road' | 'settlement' | 'city'
       let freeRoadsRemaining = 0;
       let devPlayedThisTurn = false;
+      let afterRobberPhase = 'MAIN'; // サイコロ前に騎士を使ったときは盗賊のあとにサイコロへ戻る
       let lastDice = [3, 4];
+      let hasRolled = false;
+      let diceJustRolled = false;
       let longestRoadHolder = null;
       let largestArmyHolder = null;
-      let statusBannerText = '🏝️ カタン島へようこそ！初期開拓地を配置するか「⚡高速初期配置」で即スタートできます。';
+      let statusBannerText = 'カタン島へようこそ。最初の開拓地を置くか、「おまかせ配置」ですぐに始められます。';
 
       // DOM構築
       container.innerHTML = `
         <style>
           .cat-wrapper {
             width: 100%;
-            max-width: 100%;
             display: flex;
             flex-direction: column;
-            gap: 8px;
+            gap: 10px;
             user-select: none;
-            color: #f8fafc;
-            font-family: 'Noto Sans JP', sans-serif;
+            color: var(--text);
+            font-family: var(--font-ui);
           }
-          .cat-top-bar {
+          .cat-top-bar, .cat-dock {
             display: flex;
             align-items: center;
             justify-content: space-between;
             flex-wrap: wrap;
-            gap: 8px;
-            background: rgba(15, 23, 42, 0.92);
-            border: 1px solid rgba(56, 189, 248, 0.35);
-            border-radius: 12px;
-            padding: 6px 12px;
-            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+            gap: 10px 16px;
+            padding: 10px 12px;
+            background: var(--bg-raised);
+            border: 1px solid var(--line);
+            border-radius: 6px;
           }
           .cat-players-row {
             display: flex;
-            gap: 8px;
             flex-wrap: wrap;
-            flex: 1;
+            gap: 6px;
+            flex: 1 1 520px;
+            min-width: 0;
           }
-          .cat-pcard {
+          .cat-player {
             display: flex;
             align-items: center;
-            gap: 8px;
-            background: rgba(30, 41, 59, 0.88);
-            border: 2px solid rgba(148, 163, 184, 0.28);
-            border-radius: 10px;
-            padding: 5px 10px;
-            font-size: 12px;
-            transition: all 0.2s;
-          }
-          .cat-pcard.active-turn {
-            border-color: #fbbf24;
-            background: rgba(251, 191, 36, 0.14);
-            box-shadow: 0 0 16px rgba(251, 191, 36, 0.35);
-          }
-          .cat-vp-pill {
-            background: linear-gradient(135deg, #f59e0b, #d97706);
-            color: #0f172a;
-            font-weight: 900;
-            padding: 2px 8px;
-            border-radius: 999px;
-            font-size: 12px;
-          }
-          .cat-award-badge {
-            background: rgba(234, 179, 8, 0.22);
-            border: 1px solid #fde047;
-            color: #fef08a;
-            font-size: 11px;
-            font-weight: 800;
-            padding: 1px 6px;
-            border-radius: 6px;
-          }
-          .cat-btn {
-            background: rgba(30, 41, 59, 0.92);
-            border: 1px solid rgba(148, 163, 184, 0.42);
-            color: #f8fafc;
-            font-size: 12px;
-            font-weight: 800;
-            padding: 6px 11px;
-            border-radius: 8px;
-            cursor: pointer;
-            transition: all 0.15s;
-          }
-          .cat-btn:hover:not(:disabled) {
-            border-color: #38bdf8;
-            color: #38bdf8;
-            transform: translateY(-1px);
-          }
-          .cat-btn:disabled {
-            opacity: 0.38;
-            cursor: not-allowed;
-          }
-          .cat-btn.active-mode {
-            background: linear-gradient(135deg, #0284c7, #0369a1);
-            border-color: #7dd3fc;
-            color: #ffffff;
-            box-shadow: 0 0 14px rgba(56, 189, 248, 0.55);
-          }
-          .cat-btn-gold {
-            background: linear-gradient(135deg, #f59e0b, #d97706);
-            border-color: #fef08a;
-            color: #0f172a;
-          }
-          .cat-btn-emerald {
-            background: linear-gradient(135deg, #10b981, #059669);
-            border-color: #6ee7b7;
-            color: #ffffff;
-          }
-          .cat-stage-wrap {
-            position: relative;
-            width: 100%;
-            height: calc(100vh - 270px);
-            min-height: 500px;
-            max-height: 820px;
-            background: radial-gradient(circle at 50% 40%, #0c4a6e 0%, #082f49 55%, #020617 100%);
-            border-radius: 16px;
-            border: 1px solid rgba(56, 189, 248, 0.35);
-            box-shadow: 0 20px 50px rgba(0, 0, 0, 0.75);
-            overflow: hidden;
-          }
-          .cat-stage-wrap canvas {
-            width: 100% !important;
-            height: 100% !important;
-            display: block;
-            cursor: grab;
-          }
-          .cat-stage-wrap canvas:active {
-            cursor: grabbing;
-          }
-          .cat-hud-overlay-top {
-            position: absolute;
-            top: 10px;
-            left: 14px;
-            right: 14px;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            pointer-events: none;
-            z-index: 10;
             gap: 10px;
+            padding: 7px 12px 7px 10px;
+            background: var(--surface);
+            border: 1px solid var(--line);
+            border-radius: 4px;
+            min-width: 0;
+            transition: border-color 0.25s, background 0.25s;
           }
-          .cat-banner {
-            background: rgba(15, 23, 42, 0.88);
-            backdrop-filter: blur(8px);
-            border: 1px solid rgba(251, 191, 36, 0.5);
-            padding: 6px 14px;
-            border-radius: 999px;
+          .cat-player.is-turn {
+            border-color: rgba(226, 184, 103, 0.6);
+            background: rgba(226, 184, 103, 0.07);
+          }
+          .cat-swatch {
+            flex: none;
+            width: 12px;
+            height: 12px;
+            border-radius: 2px;
+            background: var(--c);
+            box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.35);
+          }
+          .cat-player-name {
+            display: flex;
+            align-items: baseline;
+            gap: 8px;
             font-size: 13px;
-            font-weight: 800;
-            color: #fef08a;
-            pointer-events: auto;
-            box-shadow: 0 6px 20px rgba(0, 0, 0, 0.55);
+            font-weight: 700;
+            white-space: nowrap;
           }
-          .cat-dice-box {
+          .cat-player-vp {
+            font-size: 15px;
+            font-weight: 700;
+            font-variant-numeric: tabular-nums;
+          }
+          .cat-player-vp small {
+            margin-left: 2px;
+            font-family: var(--font-ui);
+            font-size: 10px;
+            color: var(--text-3);
+          }
+          .cat-player-sub {
+            font-size: 11px;
+            color: var(--text-3);
+            white-space: nowrap;
+            font-variant-numeric: tabular-nums;
+          }
+          .cat-award {
+            margin-left: 6px;
+            padding: 0 5px;
+            border: 1px solid rgba(226, 184, 103, 0.45);
+            border-radius: 2px;
+            color: #e2b867;
+            font-size: 10px;
+            font-weight: 500;
+          }
+          .cat-controls, .cat-actions {
             display: flex;
             align-items: center;
-            gap: 8px;
-            background: rgba(15, 23, 42, 0.9);
-            border: 1px solid rgba(56, 189, 248, 0.45);
-            padding: 5px 12px;
-            border-radius: 12px;
-            pointer-events: auto;
-            font-weight: 900;
+            gap: 6px;
+            flex-wrap: wrap;
           }
-          .cat-die-face {
-            width: 30px;
-            height: 30px;
-            border-radius: 6px;
-            background: #f8fafc;
-            color: #0f172a;
+          .cat-actions { justify-content: flex-end; }
+          .cat-btn, .cat-select {
+            appearance: none;
+            -webkit-appearance: none;
             display: inline-flex;
             align-items: center;
-            justify-content: center;
-            font-size: 16px;
-            font-weight: 900;
-            box-shadow: inset 0 -2px 0 #cbd5e1;
+            gap: 8px;
+            padding: 6px 12px;
+            background: transparent;
+            border: 1px solid var(--line-strong);
+            border-radius: 4px;
+            color: var(--text-2);
+            font: 500 12px/1.4 var(--font-ui);
+            letter-spacing: 0.04em;
+            white-space: nowrap;
+            cursor: pointer;
+            transition: color 0.2s, border-color 0.2s, background 0.2s;
           }
-          .cat-bottom-dock {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            flex-wrap: wrap;
-            gap: 10px;
-            background: rgba(15, 23, 42, 0.95);
-            border: 1px solid rgba(56, 189, 248, 0.35);
-            border-radius: 12px;
-            padding: 8px 14px;
+          .cat-select {
+            padding-right: 28px;
+            background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M1 1l4 4 4-4' fill='none' stroke='%23a8a6a0' stroke-width='1.2'/%3E%3C/svg%3E") no-repeat right 10px center;
           }
-          .cat-res-hand {
-            display: flex;
-            align-items: center;
-            gap: 6px;
-            flex-wrap: wrap;
+          .cat-select option { background: #161618; color: #ecebe6; }
+          .cat-btn:hover:not(:disabled), .cat-select:hover {
+            color: var(--text);
+            border-color: rgba(255, 255, 255, 0.34);
           }
-          .cat-res-card {
-            display: flex;
-            align-items: center;
-            gap: 5px;
-            padding: 5px 11px;
-            border-radius: 9px;
+          .cat-btn:disabled { opacity: 0.35; cursor: not-allowed; }
+          .cat-btn.is-primary {
+            background: var(--text);
+            border-color: var(--text);
+            color: var(--text-inverse);
+            font-weight: 700;
+          }
+          .cat-btn.is-primary:hover:not(:disabled) { background: #fff; color: var(--text-inverse); }
+          .cat-btn.is-active {
+            background: rgba(226, 184, 103, 0.1);
+            border-color: rgba(226, 184, 103, 0.7);
+            color: #e2b867;
+          }
+          .cat-cost { display: inline-flex; gap: 2px; }
+          .cat-cost i {
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            background: var(--c);
+            box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.3);
+          }
+
+          .cat-stage-wrap { position: relative; }
+          .cat-stage-wrap .ba3d-stage { height: clamp(420px, calc(100vh - 300px), 860px); }
+          .cat-status {
+            position: absolute;
+            top: 12px;
+            left: 12px;
+            z-index: 5;
+            max-width: min(560px, calc(100% - 130px));
+            padding: 8px 12px;
+            background: rgba(14, 12, 11, 0.62);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 4px;
+            backdrop-filter: blur(8px);
+            -webkit-backdrop-filter: blur(8px);
+            color: #ecebe6;
             font-size: 13px;
-            font-weight: 900;
-            border: 1px solid rgba(255,255,255,0.28);
+            line-height: 1.55;
+            pointer-events: none;
           }
-          .cat-actions-bar {
+          .cat-dice {
+            position: absolute;
+            left: 12px;
+            bottom: 12px;
+            z-index: 5;
             display: flex;
             align-items: center;
-            gap: 6px;
-            flex-wrap: wrap;
+            gap: 8px;
+            padding: 8px 12px 8px 10px;
+            background: rgba(14, 12, 11, 0.55);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 4px;
+            backdrop-filter: blur(8px);
+            -webkit-backdrop-filter: blur(8px);
+            pointer-events: none;
+            transition: opacity 0.3s;
           }
+          .cat-dice.is-idle { opacity: 0.4; }
+          .cat-die {
+            width: 28px;
+            height: 28px;
+            padding: 4px;
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            grid-template-rows: repeat(3, 1fr);
+            place-items: center;
+            border-radius: 6px;
+            background: #efe8da;
+            box-shadow: inset 0 -2px 0 rgba(0, 0, 0, 0.18), 0 2px 6px rgba(0, 0, 0, 0.45);
+          }
+          .cat-die i { width: 5px; height: 5px; border-radius: 50%; }
+          .cat-die i.on { background: #2a2119; }
+          .cat-die.is-red { background: #a5342a; }
+          .cat-die.is-red i.on { background: #f3ead8; }
+          .cat-dice-sum {
+            min-width: 26px;
+            text-align: center;
+            font-size: 20px;
+            font-weight: 700;
+            line-height: 1;
+            font-variant-numeric: tabular-nums;
+            color: #ecebe6;
+          }
+          .cat-dice.is-rolling .cat-die { animation: catRoll 0.55s cubic-bezier(0.2, 0.7, 0.2, 1); }
+          .cat-dice.is-rolling .cat-die.is-red { animation-delay: 0.06s; }
+          @keyframes catRoll {
+            0% { transform: translateY(-12px) rotate(-220deg) scale(0.8); opacity: 0.2; }
+            65% { transform: translateY(2px) rotate(10deg); opacity: 1; }
+            100% { transform: none; }
+          }
+
+          .cat-hand { display: flex; gap: 6px; flex-wrap: wrap; }
+          .cat-res {
+            position: relative;
+            min-width: 66px;
+            padding: 9px 10px 6px;
+            display: flex;
+            flex-direction: column;
+            gap: 1px;
+            background: var(--surface);
+            border: 1px solid var(--line);
+            border-radius: 3px;
+            overflow: hidden;
+          }
+          .cat-res::before {
+            content: '';
+            position: absolute;
+            inset: 0 0 auto 0;
+            height: 3px;
+            background: var(--c);
+          }
+          .cat-res-name { font-size: 11px; color: var(--text-2); }
+          .cat-res b {
+            font-size: 19px;
+            font-weight: 500;
+            line-height: 1.2;
+            font-variant-numeric: tabular-nums;
+          }
+          .cat-res small { font-size: 10px; color: var(--text-3); }
+          .cat-res.is-empty b { color: var(--text-3); }
+          .cat-wait { font-size: 12px; color: var(--text-3); }
+          .cat-prompt { font-size: 12px; color: #e2b867; }
+
           .cat-modal-overlay {
             position: absolute;
             inset: 0;
-            background: rgba(9, 13, 22, 0.76);
-            backdrop-filter: blur(5px);
+            z-index: 20;
             display: none;
             align-items: center;
             justify-content: center;
-            z-index: 30;
+            padding: 16px;
+            background: rgba(8, 7, 6, 0.6);
+            backdrop-filter: blur(6px);
+            -webkit-backdrop-filter: blur(6px);
           }
-          .cat-modal-overlay.visible {
-            display: flex;
-          }
+          .cat-modal-overlay.visible { display: flex; }
           .cat-modal-card {
-            background: linear-gradient(145deg, #1e293b, #0f172a);
-            border: 2px solid #f59e0b;
-            border-radius: 16px;
-            padding: 20px 24px;
-            max-width: 540px;
-            width: 92%;
-            box-shadow: 0 24px 60px rgba(0,0,0,0.85);
-            text-align: center;
+            width: min(560px, 100%);
+            max-height: 100%;
+            overflow: auto;
+            padding: 22px 24px;
+            background: var(--bg-raised);
+            border: 1px solid var(--line-strong);
+            border-radius: 6px;
+            box-shadow: 0 24px 60px rgba(0, 0, 0, 0.6);
+          }
+          .cat-modal-title { font-size: 17px; font-weight: 700; }
+          .cat-modal-sub { margin-top: 4px; font-size: 12px; color: var(--text-3); }
+          .cat-modal-label {
+            margin: 16px 0 8px;
+            font-size: 11px;
+            letter-spacing: 0.08em;
+            color: var(--text-3);
+          }
+          .cat-opts {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(92px, 1fr));
+            gap: 6px;
+          }
+          .cat-opt {
+            position: relative;
+            display: flex;
+            flex-direction: column;
+            align-items: flex-start;
+            gap: 2px;
+            padding: 8px 10px 8px 13px;
+            background: var(--surface);
+            border: 1px solid var(--line);
+            border-radius: 3px;
+            color: var(--text);
+            font: 500 12px/1.4 var(--font-ui);
+            text-align: left;
+            cursor: pointer;
+            overflow: hidden;
+            transition: border-color 0.2s, background 0.2s;
+          }
+          .cat-opt::before {
+            content: '';
+            position: absolute;
+            inset: 0 auto 0 0;
+            width: 3px;
+            background: var(--c);
+          }
+          .cat-opt small { font-size: 10px; color: var(--text-3); }
+          .cat-opt:hover:not(:disabled) { border-color: var(--line-strong); }
+          .cat-opt.is-selected { border-color: rgba(226, 184, 103, 0.75); background: rgba(226, 184, 103, 0.08); }
+          .cat-opt:disabled { opacity: 0.4; cursor: not-allowed; }
+          .cat-modal-actions {
+            display: flex;
+            gap: 6px;
+            flex-wrap: wrap;
+            justify-content: flex-end;
+            margin-top: 18px;
+          }
+          .cat-feedback { min-height: 18px; margin-top: 12px; font-size: 12px; color: var(--text-2); }
+          .cat-feedback.is-ok { color: #8fc79a; }
+          .cat-feedback.is-ng { color: #d39486; }
+          .cat-dev-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            margin-bottom: 6px;
+            padding: 10px 12px;
+            background: var(--surface);
+            border: 1px solid var(--line);
+            border-radius: 3px;
+          }
+          .cat-dev-row b { font-size: 13px; }
+          .cat-dev-row p { margin-top: 2px; font-size: 11px; color: var(--text-3); }
+          .cat-empty { padding: 12px 0; font-size: 12px; color: var(--text-3); }
+          .cat-rank {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 10px 4px;
+            border-bottom: 1px solid var(--line);
+            font-size: 13px;
+          }
+          .cat-rank-pos { width: 18px; color: var(--text-3); font-variant-numeric: tabular-nums; }
+          .cat-rank-meta { font-size: 11px; color: var(--text-3); }
+          .cat-rank-vp { margin-left: auto; font-size: 17px; font-weight: 700; font-variant-numeric: tabular-nums; }
+          .cat-rank-vp small { margin-left: 2px; font-family: var(--font-ui); font-size: 10px; color: var(--text-3); }
+
+          .ba3d-label.cat-gain { padding: 0; background: none; }
+          .cat-gain span {
+            display: inline-block;
+            padding: 2px 7px;
+            border-left: 2px solid var(--c);
+            border-radius: 2px;
+            background: rgba(14, 12, 11, 0.74);
+            color: #ecebe6;
+            font-size: 11px;
+            animation: catGain 1.7s ease-out both;
+          }
+          @keyframes catGain {
+            0% { opacity: 0; transform: translateY(8px); }
+            14% { opacity: 1; transform: none; }
+            72% { opacity: 1; transform: translateY(-8px); }
+            100% { opacity: 0; transform: translateY(-16px); }
+          }
+          .ba3d-label.cat-harbor {
+            padding: 1px 6px;
+            background: rgba(14, 12, 11, 0.5);
+            color: rgba(236, 235, 230, 0.86);
+            font-size: 10px;
+          }
+
+          @media (max-width: 640px) {
+            .cat-stage-wrap .ba3d-stage { height: min(62vh, 470px); }
+            .cat-status { max-width: calc(100% - 110px); font-size: 12px; }
+            .cat-player-sub { display: none; }
+            .cat-res { min-width: 56px; }
           }
         </style>
 
         <div class="cat-wrapper">
           <div class="cat-top-bar">
             <div class="cat-players-row" id="cat-players-row"></div>
-            <div style="display:flex;gap:6px;align-items:center;">
-              <select id="cat-pcount-sel" class="cat-btn">
-                <option value="3">👥 3人カタン</option>
-                <option value="4" selected>👥 4人カタン (標準)</option>
+            <div class="cat-controls">
+              <select id="cat-pcount-sel" class="cat-select" aria-label="人数">
+                <option value="3">3人</option>
+                <option value="4" selected>4人</option>
               </select>
-              <button class="cat-btn" id="cat-fast-setup-btn" title="初期配置を自動完了してダイスフェーズから即スタート">⚡ 高速初期配置</button>
-              <button class="cat-btn" id="cat-new-btn">🔄 新規島生成</button>
+              <button class="cat-btn" id="cat-fast-setup-btn" title="初期配置を自動で済ませて、サイコロから始めます">おまかせ配置</button>
+              <button class="cat-btn" id="cat-new-btn">新しい島</button>
             </div>
           </div>
 
           <div class="cat-stage-wrap" id="cat-stage-wrap">
-            <div class="cat-hud-overlay-top">
-              <div class="cat-banner" id="cat-banner">🏝️ 3D カタンの開拓者たち</div>
-              <div style="display:flex;gap:8px;align-items:center;">
-                <div class="cat-dice-box" id="cat-dice-box">
-                  <span>🎲 出目:</span>
-                  <span class="cat-die-face" id="cat-die-1">-</span>
-                  <span class="cat-die-face" id="cat-die-2">-</span>
-                  <span id="cat-dice-sum" style="color:#fef08a;font-size:15px;">(-)</span>
-                </div>
-                <button class="cat-btn" id="cat-cam-reset" style="pointer-events:auto;">🎥 視点リセット</button>
-              </div>
+            <div class="cat-status" id="cat-banner"></div>
+            <div class="cat-dice is-idle" id="cat-dice-box" aria-label="サイコロの目">
+              <div class="cat-die" id="cat-die-1"></div>
+              <div class="cat-die is-red" id="cat-die-2"></div>
+              <span class="cat-dice-sum" id="cat-dice-sum">–</span>
             </div>
-
             <div class="cat-modal-overlay" id="cat-modal-overlay">
               <div class="cat-modal-card" id="cat-modal-card"></div>
             </div>
           </div>
 
-          <div class="cat-bottom-dock">
-            <div class="cat-res-hand" id="cat-res-hand"></div>
-            <div class="cat-actions-bar" id="cat-actions-bar"></div>
+          <div class="cat-dock">
+            <div class="cat-hand" id="cat-res-hand"></div>
+            <div class="cat-actions" id="cat-actions-bar"></div>
           </div>
         </div>
       `;
@@ -431,10 +811,10 @@
       const newBtnEl = container.querySelector('#cat-new-btn');
       const stageWrapEl = container.querySelector('#cat-stage-wrap');
       const bannerEl = container.querySelector('#cat-banner');
+      const diceBoxEl = container.querySelector('#cat-dice-box');
       const die1El = container.querySelector('#cat-die-1');
       const die2El = container.querySelector('#cat-die-2');
       const diceSumEl = container.querySelector('#cat-dice-sum');
-      const camResetBtn = container.querySelector('#cat-cam-reset');
       const modalOverlayEl = container.querySelector('#cat-modal-overlay');
       const modalCardEl = container.querySelector('#cat-modal-card');
       const resHandEl = container.querySelector('#cat-res-hand');
@@ -463,10 +843,10 @@
           }
         }
 
-        const vertMap = new Map();
+        // 隣り合うタイルが共有する角は浮動小数の誤差で座標がわずかにずれるので、近いものを同じ頂点とみなす
         function getOrCreateVertex(vx, vz) {
-          const key = `${Math.round(vx * 100)}_${Math.round(vz * 100)}`;
-          if (vertMap.has(key)) return vertMap.get(key);
+          const found = vertices.find((v) => Math.abs(v.x - vx) < 0.01 && Math.abs(v.z - vz) < 0.01);
+          if (found) return found;
           const v = {
             id: vertices.length,
             x: vx,
@@ -478,7 +858,6 @@
             harbor: null
           };
           vertices.push(v);
-          vertMap.set(key, v);
           return v;
         }
 
@@ -554,15 +933,15 @@
         coastalEdges.sort((a, b) => Math.atan2(a.z, a.x) - Math.atan2(b.z, b.x));
 
         const harborTypes = shuffle([
-          { ratio: 3, res: null, label: '⛵3:1港' },
-          { ratio: 3, res: null, label: '⛵3:1港' },
-          { ratio: 3, res: null, label: '⛵3:1港' },
-          { ratio: 3, res: null, label: '⛵3:1港' },
-          { ratio: 2, res: 'wood', label: '🌲2:1港' },
-          { ratio: 2, res: 'brick', label: '🧱2:1港' },
-          { ratio: 2, res: 'sheep', label: '🐑2:1港' },
-          { ratio: 2, res: 'wheat', label: '🌾2:1港' },
-          { ratio: 2, res: 'ore', label: '⛰️2:1港' }
+          { ratio: 3, res: null },
+          { ratio: 3, res: null },
+          { ratio: 3, res: null },
+          { ratio: 3, res: null },
+          { ratio: 2, res: 'wood' },
+          { ratio: 2, res: 'brick' },
+          { ratio: 2, res: 'sheep' },
+          { ratio: 2, res: 'wheat' },
+          { ratio: 2, res: 'ore' }
         ]);
 
         for (let i = 0; i < 9; i++) {
@@ -575,8 +954,6 @@
             edgeId: ce.id,
             v1: ce.v1,
             v2: ce.v2,
-            x: ce.x * 1.18,
-            z: ce.z * 1.18,
             ...hInfo
           });
         }
@@ -585,13 +962,18 @@
       // ====================================================
       // 2. プレイヤー＆建設・ルール検証関数
       // ====================================================
+      function playerName(idx, isCpu) {
+        if (idx === mySeat) return 'あなた';
+        return isCpu ? `CPU ${PLAYER_THEMES[idx].colorName}` : `${PLAYER_THEMES[idx].colorName}のプレイヤー`;
+      }
+
       function createPlayer(idx) {
+        const isCpu = vsCpu && idx !== mySeat;
         return {
           idx,
-          name: PLAYER_THEMES[idx].name,
-          css: PLAYER_THEMES[idx].css,
-          hex: PLAYER_THEMES[idx].hex,
-          isCpu: vsCpu && idx !== mySeat,
+          name: playerName(idx, isCpu),
+          color: PLAYER_THEMES[idx].color,
+          isCpu,
           res: { wood: 0, brick: 0, sheep: 0, wheat: 0, ore: 0 },
           devCards: [], // { type, boughtTurn }
           knightsPlayed: 0,
@@ -739,7 +1121,7 @@
           }
         });
 
-        // 10VP勝利判定
+        // 10点で勝利
         for (const p of players) {
           if (calcPlayerVP(p) >= 10 && phase !== 'GAME_OVER') {
             phase = 'GAME_OVER';
@@ -768,9 +1150,11 @@
         longestRoadHolder = null;
         largestArmyHolder = null;
         lastDice = [3, 4];
+        hasRolled = false;
         buildMode = null;
         freeRoadsRemaining = 0;
         devPlayedThisTurn = false;
+        afterRobberPhase = 'MAIN';
         closeModal();
 
         if (autoSetup) {
@@ -781,7 +1165,7 @@
           setupSubPhase = 'SETTLEMENT';
           lastSetupVertexId = null;
           phase = 'SETUP';
-          statusBannerText = '🚩 初期配置フェーズ (1巡目)：光っている交差点をクリックして最初の開拓地を配置してください。';
+          statusBannerText = '初期配置（1巡目）: 光っている交差点を選んで、最初の開拓地を置いてください。';
           renderAll();
         }
       }
@@ -841,7 +1225,7 @@
         phase = 'ROLL';
         devPlayedThisTurn = false;
         CatanSfx.build();
-        statusBannerText = '⚡ 初期配置が完了しました！「🎲 ダイスを振る」をクリックして開拓を開始しましょう！';
+        statusBannerText = '初期配置が終わりました。サイコロを振って始めましょう。';
         renderAll();
       }
 
@@ -851,7 +1235,7 @@
           turnIndex = 0;
           phase = 'ROLL';
           devPlayedThisTurn = false;
-          statusBannerText = '🎉 全員の初期配置が完了しました！あなたの手番です。「🎲 ダイスを振る」をクリックしてください！';
+          statusBannerText = `全員の初期配置が終わりました。${players[0].name}の手番です。サイコロを振ってください。`;
           renderAll();
           return;
         }
@@ -863,6 +1247,9 @@
         }
         setupSubPhase = 'SETTLEMENT';
         lastSetupVertexId = null;
+        if (!players[turnIndex].isCpu) {
+          statusBannerText = `初期配置（${setupStep < playerCount ? '1' : '2'}巡目）: 光っている交差点を選んで、開拓地を置いてください。`;
+        }
         renderAll();
 
         if (players[turnIndex].isCpu) {
@@ -876,8 +1263,9 @@
             const pickEid = validEdges[Math.floor(Math.random() * validEdges.length)];
             placeSetupSettlementAndRoadFor(turnIndex, isSecond, pickVid, pickEid);
             CatanSfx.build();
+            statusBannerText = `${players[turnIndex].name}が開拓地と街道を置きました。`;
             advanceSetupTurn();
-          }, 550);
+          }, 650);
         }
       }
 
@@ -888,6 +1276,8 @@
         const d2 = Math.floor(Math.random() * 6) + 1;
         const sum = d1 + d2;
         lastDice = [d1, d2];
+        hasRolled = true;
+        diceJustRolled = true;
         CatanSfx.dice();
 
         const activeP = players[turnIndex];
@@ -895,7 +1285,7 @@
         if (sum === 7) {
           CatanSfx.robber();
           // 8枚以上の手札を持つプレイヤーは半分切り捨てバースト
-          const burstLogs = [];
+          const burstNames = [];
           players.forEach((p) => {
             const tot = totalRes(p);
             if (tot >= 8) {
@@ -905,25 +1295,26 @@
                 const pick = haveTypes[Math.floor(Math.random() * haveTypes.length)];
                 p.res[pick]--;
               }
-              burstLogs.push(`${p.name}が${dropCount}枚バースト`);
+              burstNames.push(`${p.name}（${dropCount}枚）`);
             }
           });
-          const burstMsg = burstLogs.length > 0 ? `（💥 ${burstLogs.join('・')}）` : '';
+          const burstMsg = burstNames.length > 0 ? `${burstNames.join('、')}が手札を半分捨てました。` : '';
 
           if (activeP.isCpu) {
             cpuMoveRobber(activeP);
+            if (burstMsg) statusBannerText = `出目は 7。${burstMsg}${statusBannerText}`;
             phase = 'MAIN';
             renderAll();
           } else {
             phase = 'ROBBER_MOVE';
-            statusBannerText = `🦹 出目「7」！${burstMsg} 盤上のタイルをクリックして盗賊を移動させてください！`;
+            statusBannerText = `出目は 7。${burstMsg}盗賊を動かすタイルを選んでください。`;
             renderAll();
           }
           return;
         }
 
         // 通常の資源産出
-        const gainLogs = [];
+        const gains = new Map();
         hexes.forEach((h) => {
           if (h.number === sum && !h.hasRobber && h.terrain !== 'desert') {
             h.vertexIds.forEach((vid) => {
@@ -931,14 +1322,22 @@
               if (b) {
                 const amt = b.type === 'city' ? 2 : 1;
                 players[b.owner].res[h.terrain] += amt;
-                gainLogs.push(`${players[b.owner].name}:${RES_META[h.terrain].icon}+${amt}`);
+                const key = `${b.owner}:${h.terrain}`;
+                gains.set(key, (gains.get(key) || 0) + amt);
+                view.pendingGains.push({ vid, terrain: h.terrain, amt });
               }
             });
           }
         });
+        view.flashNumber = sum;
+
+        const gainText = Array.from(gains.entries()).map(([key, amt]) => {
+          const [owner, terrain] = key.split(':');
+          return `${players[owner].name} ${RES_META[terrain].name}+${amt}`;
+        });
 
         phase = 'MAIN';
-        statusBannerText = `🎲 出目【${sum}】！ ${gainLogs.length > 0 ? gainLogs.join(' / ') : '資源産出なし'}`;
+        statusBannerText = `出目は ${sum}。${gainText.length > 0 ? gainText.join('、') : '資源の産出はありません。'}`;
         renderAll();
       }
 
@@ -964,13 +1363,14 @@
             const stolenRes = avail[Math.floor(Math.random() * avail.length)];
             victim.res[stolenRes]--;
             p.res[stolenRes]++;
-            stealText = `（${victim.name}から資源を1枚強奪！）`;
+            stealText = `${victim.name}から資源を1枚奪いました。`;
           }
         }
 
         CatanSfx.robber();
-        statusBannerText = `🦹 ${p.name} が盗賊を【${RES_META[targetHex.terrain].terrainName}】へ移動しました${stealText}`;
-        phase = 'MAIN';
+        statusBannerText = `${p.name}が盗賊を${RES_META[targetHex.terrain].terrain}へ動かしました。${stealText}`;
+        phase = afterRobberPhase;
+        afterRobberPhase = 'MAIN';
         renderAll();
       }
 
@@ -1013,7 +1413,7 @@
           lastSetupVertexId = vId;
           setupSubPhase = 'ROAD';
           CatanSfx.build();
-          statusBannerText = '🛣️ 今配置した開拓地に隣接する辺をクリックして街道を1本配置してください。';
+          statusBannerText = '置いた開拓地に接する道を選んで、街道を1本置いてください。';
           renderAll();
           return;
         }
@@ -1026,7 +1426,7 @@
           p.settlementsLeft--;
           buildMode = null;
           CatanSfx.build();
-          statusBannerText = `🏠 ${p.name} が新しい開拓地を建設しました！(+1VP)`;
+          statusBannerText = `${p.name}が開拓地を建てました（+1点）。`;
           updateAwardsAndCheckVictory();
           renderAll();
           return;
@@ -1041,7 +1441,7 @@
           p.citiesLeft--;
           buildMode = null;
           CatanSfx.build();
-          statusBannerText = `🏰 ${p.name} が開拓地を都市に発展させました！(+1VP・産出2倍)`;
+          statusBannerText = `${p.name}が開拓地を都市にしました（+1点、産出が2倍）。`;
           updateAwardsAndCheckVictory();
           renderAll();
         }
@@ -1070,9 +1470,9 @@
           CatanSfx.build();
           if (freeRoadsRemaining <= 0 || p.roadsLeft <= 0 || getValidRoadEdges(p.idx).length === 0) {
             phase = 'MAIN';
-            statusBannerText = '🛣️ 街道建設カードによる2本の無料街道建設が完了しました！';
+            statusBannerText = '街道建設カードの街道を置き終えました。';
           } else {
-            statusBannerText = '🛣️ もう1本、無料で建設する街道の場所をクリックしてください。';
+            statusBannerText = 'もう1本、街道を置く場所を選んでください。';
           }
           updateAwardsAndCheckVictory();
           renderAll();
@@ -1087,7 +1487,7 @@
           p.roadsLeft--;
           buildMode = null;
           CatanSfx.build();
-          statusBannerText = `🛣️ ${p.name} が街道を建設しました！`;
+          statusBannerText = `${p.name}が街道を建てました。`;
           updateAwardsAndCheckVictory();
           renderAll();
         }
@@ -1103,7 +1503,10 @@
           p.devCards.push({ type: cardType, boughtTurn: true });
         }
         CatanSfx.build();
-        statusBannerText = `🃏 ${p.name} が発展カードを引きました！（${DEV_CARD_META[cardType].name}）`;
+        // CPU が引いたカードの種類は伏せる
+        statusBannerText = p.isCpu
+          ? `${p.name}が発展カードを1枚引きました。`
+          : `${p.name}が発展カード「${DEV_CARD_META[cardType].name}」を引きました。`;
         updateAwardsAndCheckVictory();
         renderAll();
       }
@@ -1117,6 +1520,9 @@
         turnIndex = (turnIndex + 1) % playerCount;
         phase = 'ROLL';
         devPlayedThisTurn = false;
+        if (!players[turnIndex].isCpu) {
+          statusBannerText = `${players[turnIndex].name}の手番です。サイコロを振ってください。`;
+        }
         renderAll();
 
         if (players[turnIndex].isCpu) {
@@ -1134,7 +1540,7 @@
         if (phase === 'GAME_OVER') return;
 
         // 2. CPUの貿易・建設思考
-        setTimeout(() => {
+        cpuTimer = setTimeout(() => {
           if (isDestroyed || phase === 'GAME_OVER') return;
 
           // 騎士カードがあれば使う
@@ -1169,7 +1575,7 @@
             cpu.settlementsLeft++;
             cpu.citiesLeft--;
             CatanSfx.build();
-            statusBannerText = `🏰 ${cpu.name} が開拓地を都市に発展させました！`;
+            statusBannerText = `${cpu.name}が開拓地を都市にしました。`;
           }
           // 優先度2: 開拓地建設
           if (canAffordSettlement(cpu)) {
@@ -1180,7 +1586,7 @@
             vertices[vId].building = { owner: cpu.idx, type: 'settlement' };
             cpu.settlementsLeft--;
             CatanSfx.build();
-            statusBannerText = `🏠 ${cpu.name} が開拓地を建設しました！`;
+            statusBannerText = `${cpu.name}が開拓地を建てました。`;
           }
           // 優先度3: 発展カード購入
           if (canAffordDevCard(cpu)) {
@@ -1193,7 +1599,7 @@
             edges[eId].roadOwner = cpu.idx;
             cpu.roadsLeft--;
             CatanSfx.build();
-            statusBannerText = `🛣️ ${cpu.name} が街道を延ばしました。`;
+            statusBannerText = `${cpu.name}が街道を延ばしました。`;
           }
 
           if (!updateAwardsAndCheckVictory()) {
@@ -1203,31 +1609,35 @@
       }
 
       // ====================================================
-      // 4. 貿易モーダル（海上港貿易 ＆ プレイヤー間AI交渉）＆発展カードモーダル
+      // 4. 交易・発展カード・勝敗のダイアログ
       // ====================================================
       function closeModal() {
         modalOverlayEl.classList.remove('visible');
       }
 
+      function openModal(html) {
+        modalCardEl.innerHTML = html;
+        modalOverlayEl.classList.add('visible');
+      }
+
       function openTradeModal(p) {
         const rates = getTradeRates(p);
-        let giveRes = RES_TYPES.find((k) => p.res[k] >= rates[k]) || 'wood';
-        let wantRes = 'wheat';
+        let giveRes = RES_TYPES.find((k) => p.res[k] >= rates[k]) || RES_TYPES.reduce((a, b) => (p.res[b] > p.res[a] ? b : a));
+        let wantRes = RES_TYPES.find((k) => k !== giveRes) || 'wheat';
+        let feedback = { text: '', tone: '' };
 
         function renderTradeContent() {
           const giveBtns = RES_TYPES.map((k) => {
             const rm = RES_META[k];
-            const rate = rates[k];
-            const ok = p.res[k] >= rate;
-            return `<button class="cat-btn ${giveRes === k ? 'active-mode' : ''}" data-give="${k}" style="background:${rm.css};">
-              ${rm.icon} ${rm.name} (所持:${p.res[k]} / レート${rate}:1) ${ok ? '✅' : ''}
+            return `<button class="cat-opt ${giveRes === k ? 'is-selected' : ''}" data-give="${k}" style="--c:${rm.color}">
+              ${rm.name}<small>${p.res[k]}枚 · ${rates[k]}:1</small>
             </button>`;
           }).join('');
 
           const wantBtns = RES_TYPES.map((k) => {
             const rm = RES_META[k];
-            return `<button class="cat-btn ${wantRes === k ? 'active-mode' : ''}" data-want="${k}" style="background:${rm.css};">
-              ${rm.icon} ${rm.name} を1枚貰う
+            return `<button class="cat-opt ${wantRes === k ? 'is-selected' : ''}" data-want="${k}" style="--c:${rm.color}" ${k === giveRes ? 'disabled' : ''}>
+              ${rm.name}<small>1枚もらう</small>
             </button>`;
           }).join('');
 
@@ -1235,28 +1645,34 @@
           const canPlayerOffer = p.res[giveRes] >= 1 && giveRes !== wantRes;
 
           modalCardEl.innerHTML = `
-            <div style="font-size:19px;font-weight:900;color:#fef08a;margin-bottom:8px;">⛵ 海上・港貿易 ＆ 🤝 プレイヤー間1:1交渉</div>
-            <div style="font-size:12px;color:#cbd5e1;margin-bottom:10px;">【1. 差し出す資源を選択】</div>
-            <div style="display:flex;gap:6px;justify-content:center;flex-wrap:wrap;margin-bottom:12px;">${giveBtns}</div>
-            <div style="font-size:12px;color:#cbd5e1;margin-bottom:10px;">【2. 欲しい資源を選択】</div>
-            <div style="display:flex;gap:6px;justify-content:center;flex-wrap:wrap;margin-bottom:16px;">${wantBtns}</div>
-            <div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap;">
-              <button class="cat-btn cat-btn-emerald" id="cat-do-bank-trade" ${canBankTrade ? '' : 'disabled'}>
-                ⛵ 港・銀行貿易 (${RES_META[giveRes].short}×${rates[giveRes]} ➔ ${RES_META[wantRes].short}×1)
-              </button>
-              <button class="cat-btn cat-btn-gold" id="cat-do-p2p-trade" ${canPlayerOffer ? '' : 'disabled'}>
-                🤝 他プレイヤーに1:1交換を提案 (${RES_META[giveRes].short}×1 ⇄ ${RES_META[wantRes].short}×1)
-              </button>
+            <div class="cat-modal-title">交易</div>
+            <div class="cat-modal-sub">銀行とは港のレートで、他のプレイヤーとは1対1で交換できます。</div>
+            <div class="cat-modal-label">出す資源</div>
+            <div class="cat-opts">${giveBtns}</div>
+            <div class="cat-modal-label">もらう資源</div>
+            <div class="cat-opts">${wantBtns}</div>
+            <div class="cat-feedback ${feedback.tone}">${feedback.text}</div>
+            <div class="cat-modal-actions">
               <button class="cat-btn" id="cat-close-trade">閉じる</button>
+              <button class="cat-btn" id="cat-do-p2p-trade" ${canPlayerOffer ? '' : 'disabled'}>
+                1対1で提案（${RES_META[giveRes].name}1 → ${RES_META[wantRes].name}1）
+              </button>
+              <button class="cat-btn is-primary" id="cat-do-bank-trade" ${canBankTrade ? '' : 'disabled'}>
+                銀行と交換（${RES_META[giveRes].name}${rates[giveRes]} → ${RES_META[wantRes].name}1）
+              </button>
             </div>
-            <div id="cat-trade-feedback" style="margin-top:10px;font-size:13px;font-weight:800;color:#38bdf8;"></div>
           `;
 
           modalCardEl.querySelectorAll('[data-give]').forEach((b) => {
-            b.onclick = () => { giveRes = b.getAttribute('data-give'); renderTradeContent(); };
+            b.onclick = () => {
+              giveRes = b.getAttribute('data-give');
+              if (wantRes === giveRes) wantRes = RES_TYPES.find((k) => k !== giveRes);
+              feedback = { text: '', tone: '' };
+              renderTradeContent();
+            };
           });
           modalCardEl.querySelectorAll('[data-want]').forEach((b) => {
-            b.onclick = () => { wantRes = b.getAttribute('data-want'); renderTradeContent(); };
+            b.onclick = () => { wantRes = b.getAttribute('data-want'); feedback = { text: '', tone: '' }; renderTradeContent(); };
           });
           modalCardEl.querySelector('#cat-close-trade').onclick = closeModal;
 
@@ -1266,7 +1682,8 @@
               p.res[giveRes] -= rates[giveRes];
               p.res[wantRes] += 1;
               CatanSfx.trade();
-              statusBannerText = `⛵ ${p.name} が海上貿易で ${RES_META[giveRes].name}×${rates[giveRes]} を ${RES_META[wantRes].name}×1 に交換しました。`;
+              statusBannerText = `${p.name}が${RES_META[giveRes].name}${rates[giveRes]}枚を${RES_META[wantRes].name}1枚と交換しました。`;
+              feedback = { text: `${RES_META[wantRes].name}を1枚もらいました。`, tone: 'is-ok' };
               renderTradeContent();
               renderAll();
             };
@@ -1275,22 +1692,21 @@
           const p2pBtn = modalCardEl.querySelector('#cat-do-p2p-trade');
           if (p2pBtn && canPlayerOffer) {
             p2pBtn.onclick = () => {
-              // 他プレイヤーの中で wantRes を2枚以上持ち、giveRes が0〜1枚のAIが交渉成立に応じる
+              // 欲しい資源を2枚以上持ち、出す資源が0〜1枚のプレイヤーが応じる
               const partner = players.find((other) => other.idx !== p.idx && other.res[wantRes] >= 2 && other.res[giveRes] <= 1);
-              const fb = modalCardEl.querySelector('#cat-trade-feedback');
               if (partner) {
                 p.res[giveRes]--;
                 p.res[wantRes]++;
                 partner.res[wantRes]--;
                 partner.res[giveRes]++;
                 CatanSfx.trade();
-                fb.style.color = '#34d399';
-                fb.textContent = `🤝 交渉成立！ ${partner.name} が 1:1 交換に応じてくれました！`;
-                statusBannerText = `🤝 ${p.name} と ${partner.name} の間で資源1:1トレードが成立しました！`;
+                feedback = { text: `${partner.name}が交換に応じました。`, tone: 'is-ok' };
+                statusBannerText = `${p.name}と${partner.name}が1対1で交換しました。`;
+                renderTradeContent();
                 renderAll();
               } else {
-                fb.style.color = '#fb7185';
-                fb.textContent = `💬 他プレイヤー全員：「今はその条件では交換できません…」`;
+                feedback = { text: 'この条件で応じるプレイヤーはいませんでした。', tone: 'is-ng' };
+                renderTradeContent();
               }
             };
           }
@@ -1301,39 +1717,36 @@
       }
 
       function openDevCardsModal(p) {
-        const playable = p.devCards.map((c, idx) => ({ ...c, idx }));
-        const rows = playable.length === 0
-          ? `<div style="color:#94a3b8;margin:14px 0;">所持しているアクション発展カードはありません（VPカード所持: ${p.vpCardsCount}枚）</div>`
-          : playable.map((c) => {
+        const rows = p.devCards.length === 0
+          ? `<div class="cat-empty">使える発展カードはありません。</div>`
+          : p.devCards.map((c, idx) => {
               const meta = DEV_CARD_META[c.type];
-              const canUse = !c.boughtTurn && !devPlayedThisTurn;
+              const canUse = !c.boughtTurn && !devPlayedThisTurn && (phase === 'MAIN' || phase === 'ROLL');
+              const reason = c.boughtTurn ? '引いた手番は使えません' : devPlayedThisTurn ? 'この手番は使用済み' : '';
               return `
-                <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 12px;margin-bottom:8px;background:rgba(255,255,255,0.06);border-radius:10px;text-align:left;">
-                  <div>
-                    <div style="font-weight:900;color:#fef08a;">${meta.name}</div>
-                    <div style="font-size:11px;color:#cbd5e1;">${meta.desc}</div>
-                  </div>
-                  <button class="cat-btn cat-btn-emerald" data-use-dev="${c.idx}" ${canUse ? '' : 'disabled'}>
-                    ${c.boughtTurn ? '購入ターン不可' : '使用する'}
-                  </button>
+                <div class="cat-dev-row">
+                  <div><b>${meta.name}</b><p>${meta.desc}</p></div>
+                  <button class="cat-btn ${canUse ? 'is-primary' : ''}" data-use-dev="${idx}" ${canUse ? '' : 'disabled'} title="${reason}">${canUse ? '使う' : reason || '使えません'}</button>
                 </div>
               `;
             }).join('');
+        const canBuy = canAffordDevCard(p) && phase === 'MAIN';
 
-        modalCardEl.innerHTML = `
-          <div style="font-size:19px;font-weight:900;color:#fef08a;margin-bottom:8px;">🃏 所持発展カード （山札残り: ${devDeck.length}枚）</div>
+        openModal(`
+          <div class="cat-modal-title">発展カード</div>
+          <div class="cat-modal-sub">山札 ${devDeck.length}枚 · 勝利点カード ${p.vpCardsCount}枚</div>
+          <div class="cat-modal-label">手元のカード</div>
           <div>${rows}</div>
-          <div style="margin-top:14px;display:flex;gap:8px;justify-content:center;">
-            <button class="cat-btn cat-btn-gold" id="cat-buy-dev-btn" ${canAffordDevCard(p) && phase === 'MAIN' ? '' : 'disabled'}>
-              🃏 新しく発展カードを引く (🐑1・🌾1・⛰️1)
-            </button>
+          <div class="cat-modal-actions">
             <button class="cat-btn" id="cat-close-dev">閉じる</button>
+            <button class="cat-btn is-primary" id="cat-buy-dev-btn" ${canBuy ? '' : 'disabled'} title="費用: ${costText('dev')}">
+              カードを引く ${costDots('dev')}
+            </button>
           </div>
-        `;
-        modalOverlayEl.classList.add('visible');
+        `);
         modalCardEl.querySelector('#cat-close-dev').onclick = closeModal;
         const buyBtn = modalCardEl.querySelector('#cat-buy-dev-btn');
-        if (buyBtn && canAffordDevCard(p) && phase === 'MAIN') {
+        if (buyBtn && canBuy) {
           buyBtn.onclick = () => {
             buyDevelopmentCard(p);
             openDevCardsModal(p);
@@ -1351,17 +1764,17 @@
 
             if (card.type === 'knight') {
               p.knightsPlayed++;
+              afterRobberPhase = phase === 'ROLL' ? 'ROLL' : 'MAIN';
               phase = 'ROBBER_MOVE';
-              statusBannerText = '⚔️ 騎士カード発動！盤上のタイルをクリックして盗賊を移動させてください！';
+              statusBannerText = '騎士を使いました。盗賊を動かすタイルを選んでください。';
               updateAwardsAndCheckVictory();
               renderAll();
             } else if (card.type === 'road_building') {
               freeRoadsRemaining = 2;
               phase = 'FREE_ROADS';
-              statusBannerText = '🛣️ 街道建設カード発動！コストなしで2本の街道を配置できます。';
+              statusBannerText = '街道建設: 費用なしで街道を2本置けます。';
               renderAll();
             } else if (card.type === 'year_of_plenty') {
-              // 一番少ない資源を2枚獲得（または選択モーダル）
               openYearOfPlentyModal(p);
             } else if (card.type === 'monopoly') {
               openMonopolyModal(p);
@@ -1370,22 +1783,26 @@
         });
       }
 
-      function openYearOfPlentyModal(p) {
-        const btns = RES_TYPES.map((k) => {
+      function resourcePicker(attr, hint) {
+        return RES_TYPES.map((k) => {
           const rm = RES_META[k];
-          return `<button class="cat-btn" data-yop="${k}" style="background:${rm.css};">${rm.icon} ${rm.name} ×2枚を獲得</button>`;
+          return `<button class="cat-opt" ${attr}="${k}" style="--c:${rm.color}">${rm.name}<small>${hint(k)}</small></button>`;
         }).join('');
-        modalCardEl.innerHTML = `
-          <div style="font-size:18px;font-weight:900;color:#fef08a;margin-bottom:10px;">🎁 発見 (Year of Plenty)：銀行から獲得する資源を選択</div>
-          <div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap;">${btns}</div>
-        `;
-        modalOverlayEl.classList.add('visible');
+      }
+
+      function openYearOfPlentyModal(p) {
+        openModal(`
+          <div class="cat-modal-title">発見</div>
+          <div class="cat-modal-sub">銀行からもらう資源を選んでください（2枚）。</div>
+          <div class="cat-modal-label">資源</div>
+          <div class="cat-opts">${resourcePicker('data-yop', (k) => `手元 ${p.res[k]}枚`)}</div>
+        `);
         modalCardEl.querySelectorAll('[data-yop]').forEach((b) => {
           b.onclick = () => {
             const k = b.getAttribute('data-yop');
             p.res[k] += 2;
             CatanSfx.trade();
-            statusBannerText = `🎁 ${p.name} が「発見」で ${RES_META[k].name} を2枚獲得しました！`;
+            statusBannerText = `${p.name}が「発見」で${RES_META[k].name}を2枚もらいました。`;
             closeModal();
             renderAll();
           };
@@ -1393,15 +1810,12 @@
       }
 
       function openMonopolyModal(p) {
-        const btns = RES_TYPES.map((k) => {
-          const rm = RES_META[k];
-          return `<button class="cat-btn" data-mono="${k}" style="background:${rm.css};">${rm.icon} ${rm.name} を全員から独占回収！</button>`;
-        }).join('');
-        modalCardEl.innerHTML = `
-          <div style="font-size:18px;font-weight:900;color:#fef08a;margin-bottom:10px;">👑 独占 (Monopoly)：全員から奪う資源を1種類宣言</div>
-          <div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap;">${btns}</div>
-        `;
-        modalOverlayEl.classList.add('visible');
+        openModal(`
+          <div class="cat-modal-title">独占</div>
+          <div class="cat-modal-sub">指定した資源を、他の全員からすべてもらいます。</div>
+          <div class="cat-modal-label">資源</div>
+          <div class="cat-opts">${resourcePicker('data-mono', () => '全員から')}</div>
+        `);
         modalCardEl.querySelectorAll('[data-mono]').forEach((b) => {
           b.onclick = () => {
             const k = b.getAttribute('data-mono');
@@ -1414,7 +1828,7 @@
             });
             p.res[k] += totalTaken;
             CatanSfx.robber();
-            statusBannerText = `👑 ${p.name} が「独占」で全員から ${RES_META[k].name} を合計 ${totalTaken} 枚回収しました！`;
+            statusBannerText = `${p.name}が「独占」で${RES_META[k].name}を合計${totalTaken}枚集めました。`;
             closeModal();
             renderAll();
           };
@@ -1424,677 +1838,867 @@
       function openVictoryModal(winner) {
         const ranked = players.slice().sort((a, b) => calcPlayerVP(b) - calcPlayerVP(a));
         const rows = ranked.map((p, i) => `
-          <div style="display:flex;justify-content:space-between;padding:8px 12px;margin-bottom:6px;background:rgba(255,255,255,0.07);border-radius:8px;border-left:4px solid ${p.css};">
-            <span><b>${i + 1}位: ${p.name}</b></span>
-            <span>🏆 <b>${calcPlayerVP(p)} VP</b> （騎士:${p.knightsPlayed} / 最長路:${computeLongestRoadForPlayer(p.idx)}本）</span>
+          <div class="cat-rank">
+            <span class="cat-rank-pos">${i + 1}</span>
+            <span class="cat-swatch" style="--c:${p.color}"></span>
+            <div>
+              <div>${p.name}</div>
+              <div class="cat-rank-meta">騎士 ${p.knightsPlayed} · 交易路 ${computeLongestRoadForPlayer(p.idx)}</div>
+            </div>
+            <span class="cat-rank-vp">${calcPlayerVP(p)}<small>点</small></span>
           </div>
         `).join('');
-        modalCardEl.innerHTML = `
-          <div style="font-size:22px;font-weight:900;color:#fef08a;margin-bottom:10px;">🏆 カタン島開拓制覇！勝者: ${winner.name}</div>
-          <div style="margin-bottom:16px;text-align:left;">${rows}</div>
-          <button class="cat-btn cat-btn-gold" id="cat-rematch-btn">🔄 新しい島でもう一度プレイ</button>
-        `;
-        modalOverlayEl.classList.add('visible');
+        if (winner.idx === mySeat) bridge.recordWin();
+        openModal(`
+          <div class="cat-modal-title">${winner.name === 'あなた' ? 'あなたの勝利' : `${winner.name}の勝利`}</div>
+          <div class="cat-modal-sub">10点に到達しました。</div>
+          <div style="margin-top:12px;">${rows}</div>
+          <div class="cat-modal-actions">
+            <button class="cat-btn is-primary" id="cat-rematch-btn">新しい島でもう一度</button>
+          </div>
+        `);
         modalCardEl.querySelector('#cat-rematch-btn').onclick = () => initGame(false);
       }
 
       // ====================================================
-      // 5. Three.js + Godot 4.7 GLB フル3D島ジオラマ描画
+      // 5. 3D の島 (共通エンジンの卓上ステージに組み立てる)
       // ====================================================
+      const B3D = window.BoardArena3D;
+      const TILE_TOP = 0.2;      // タイル天面の高さ (海面 = 0)
+      const TOKEN_H = 0.07;
+      const ROAD_LEN = HEX_RADIUS * 0.62;
+      const ROBBER_ANGLE = 0.62; // 盗賊はタイル中心から右手前に立たせる
+      const ROBBER_R = 1.0;
+      const SEA_R = 11.0;        // 海の外接半径 (外枠の内側)
+
       let THREE = null;
-      let scene = null;
-      let camera = null;
-      let renderer = null;
-      let boardGroup = null;
-      let interactiveObjects = [];
-      let maxAniso = 8;
-      const glbModels = { settlement: null, city: null, road: null, robber: null };
+      let st = null;
+      const view = {
+        builtFor: null,
+        island: null,
+        pieces: null,
+        targets: null,
+        tiles: new Map(),
+        buildings: new Map(),
+        roads: new Map(),
+        robber: null,
+        robberHex: -1,
+        labels: [],
+        ghost: null,
+        hiddenBuilding: null,
+        raisedTile: null,
+        pulse: null,
+        pendingGains: [],
+        flashNumber: 0
+      };
 
-      let camSpherical = { radius: 19.5, phi: 0.72, theta: 0 };
+      const geoC = (key, make) => st.geo.cached(key, make);
 
-      function ensureThreeLoaded() {
-        return new Promise((resolve) => {
-          if (window.THREE) return resolve(window.THREE);
-          const s = document.createElement('script');
-          s.src = 'https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js';
-          s.onload = () => resolve(window.THREE);
-          document.head.appendChild(s);
+      // 頂点の角度 rotDeg から始まる正六角形 (Shape 座標。ワールドでは z = -y)
+      function hexShape(r, rotDeg) {
+        const s = new THREE.Shape();
+        for (let i = 0; i < 6; i++) {
+          const a = (Math.PI / 180) * (60 * i + rotDeg);
+          const x = r * Math.cos(a);
+          const y = -r * Math.sin(a);
+          if (i === 0) s.moveTo(x, y);
+          else s.lineTo(x, y);
+        }
+        s.closePath();
+        return s;
+      }
+
+      function hexPath(r, rotDeg) {
+        const p = new THREE.Path();
+        for (let i = 0; i < 6; i++) {
+          const a = (Math.PI / 180) * (60 * i + rotDeg);
+          const x = r * Math.cos(a);
+          const y = -r * Math.sin(a);
+          if (i === 0) p.moveTo(x, y);
+          else p.lineTo(x, y);
+        }
+        p.closePath();
+        return p;
+      }
+
+      // 天面を真上から投影した UV (size 四方を 0..1 に。奥 = テクスチャの上)
+      function planarUV(g, size) {
+        const pos = g.attributes.position;
+        const uv = g.attributes.uv;
+        for (let i = 0; i < pos.count; i++) {
+          uv.setXY(i, pos.getX(i) / size + 0.5, 0.5 - pos.getZ(i) / size);
+        }
+        uv.needsUpdate = true;
+        return g;
+      }
+
+      // ---- 材質 ----
+      const facet = (hex, rough = 0.85) => st.kit.cached(`cat-facet:${hex}:${rough}`, () => new THREE.MeshStandardMaterial({
+        color: st.kit.color(hex), roughness: rough, metalness: 0, flatShading: true, envMapIntensity: 0.45
+      }));
+
+      function terrainMats(terrain) {
+        return [
+          st.kit.cached(`cat-tile-top:${terrain}`, () => new THREE.MeshStandardMaterial({
+            map: st.kit.texture(terrainCanvas(B3D, terrain)), roughness: 0.88, metalness: 0, envMapIntensity: 0.35
+          })),
+          st.kit.cached(`cat-tile-side:${terrain}`, () => new THREE.MeshStandardMaterial({
+            color: st.kit.color(TERRAIN_PAINT[terrain].side), roughness: 0.8, metalness: 0, envMapIntensity: 0.35
+          }))
+        ];
+      }
+
+      function pieceMat(owner) {
+        const hex = PLAYER_THEMES[owner].color;
+        return st.kit.cached(`cat-piece:${hex}`, () => new THREE.MeshPhysicalMaterial({
+          color: st.kit.color(hex),
+          roughness: 0.5,
+          metalness: 0,
+          clearcoat: 0.3,
+          clearcoatRoughness: 0.4,
+          envMapIntensity: 0.75,
+          bumpMap: st.kit.texture(B3D.canvas.wood('maple', 23), { repeat: 2.5, srgb: false }),
+          bumpScale: 0.0025
+        }));
+      }
+
+      const targetMat = () => st.kit.cached('cat-target', () => new THREE.MeshBasicMaterial({
+        color: st.kit.color('#f4ead2'), transparent: true, opacity: 0.7, depthWrite: false, toneMapped: false
+      }));
+
+      // ---- 駒の形 ----
+      function houseGeo() {
+        return geoC('cat-house', () => {
+          const s = new THREE.Shape();
+          s.moveTo(-0.17, 0);
+          s.lineTo(0.17, 0);
+          s.lineTo(0.17, 0.19);
+          s.lineTo(0, 0.35);
+          s.lineTo(-0.17, 0.19);
+          s.closePath();
+          const g = new THREE.ExtrudeGeometry(s, { depth: 0.24, bevelEnabled: true, bevelThickness: 0.014, bevelSize: 0.014, bevelSegments: 2, curveSegments: 4 });
+          g.translate(0, 0.014, -0.12);
+          return g;
         });
       }
 
-      function init3DStage(threeLib) {
-        THREE = threeLib;
-        const w = stageWrapEl.clientWidth || 960;
-        const h = stageWrapEl.clientHeight || 580;
+      function cityGeo() {
+        return geoC('cat-city', () => {
+          const s = new THREE.Shape();
+          s.moveTo(-0.28, 0);
+          s.lineTo(0.28, 0);
+          s.lineTo(0.28, 0.2);
+          s.lineTo(0.02, 0.2);
+          s.lineTo(0.02, 0.37);
+          s.lineTo(-0.13, 0.52);
+          s.lineTo(-0.28, 0.37);
+          s.closePath();
+          const g = new THREE.ExtrudeGeometry(s, { depth: 0.26, bevelEnabled: true, bevelThickness: 0.014, bevelSize: 0.014, bevelSegments: 2, curveSegments: 4 });
+          g.translate(0, 0.014, -0.13);
+          return g;
+        });
+      }
 
-        scene = new THREE.Scene();
-        camera = new THREE.PerspectiveCamera(38, w / h, 0.1, 200);
-        renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, powerPreference: 'high-performance' });
-        renderer.setSize(w, h);
-        renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2.5));
-        renderer.shadowMap.enabled = true;
-        renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-        stageWrapEl.appendChild(renderer.domElement);
+      const roadGeo = () => geoC('cat-road', () => st.geo.roundedBox(0.12, 0.09, ROAD_LEN, 0.025, 2).translate(0, 0.045, 0));
 
-        maxAniso = renderer.capabilities.getMaxAnisotropy ? renderer.capabilities.getMaxAnisotropy() : 8;
+      const robberGeo = () => geoC('cat-robber', () => st.geo.lathe([
+        [0, 0], [0.2, 0], [0.215, 0.025], [0.2, 0.06], [0.155, 0.11], [0.165, 0.2], [0.18, 0.32],
+        [0.165, 0.42], [0.125, 0.5], [0.09, 0.55], [0.12, 0.6], [0.135, 0.67], [0.12, 0.74], [0.075, 0.79], [0, 0.805]
+      ], 40));
 
-        // 太陽光＆海洋リムライト
-        scene.add(new THREE.AmbientLight(0xf1f5f9, 0.9));
-        const sunLight = new THREE.DirectionalLight(0xfffbeb, 1.35);
-        sunLight.position.set(10, 20, 12);
-        sunLight.castShadow = true;
-        sunLight.shadow.mapSize.width = 2048;
-        sunLight.shadow.mapSize.height = 2048;
-        scene.add(sunLight);
-
-        const seaLight = new THREE.DirectionalLight(0x38bdf8, 0.45);
-        seaLight.position.set(-12, 10, -10);
-        scene.add(seaLight);
-
-        // 海洋3Dテーブルベース
-        const seaTable = new THREE.Mesh(
-          new THREE.CylinderGeometry(11.4, 11.8, 0.36, 12),
-          new THREE.MeshStandardMaterial({ color: 0x0284c7, roughness: 0.25, metalness: 0.2 })
-        );
-        seaTable.position.y = -0.22;
-        seaTable.receiveShadow = true;
-        scene.add(seaTable);
-
-        const outerFrame = new THREE.Mesh(
-          new THREE.CylinderGeometry(12.1, 12.3, 0.28, 12),
-          new THREE.MeshStandardMaterial({ color: 0x78350f, roughness: 0.4, metalness: 0.15 })
-        );
-        outerFrame.position.y = -0.28;
-        scene.add(outerFrame);
-
-        boardGroup = new THREE.Group();
-        scene.add(boardGroup);
-
-        // Godot 4.7 GLBモデル群の非同期ロード
-        if (window.THREE.GLTFLoader && window.location.protocol !== 'file:') {
-          const loader = new window.THREE.GLTFLoader();
-          const mapPaths = {
-            settlement: 'assets/models/catan_settlement.glb',
-            city: 'assets/models/catan_city.glb',
-            road: 'assets/models/catan_road.glb',
-            robber: 'assets/models/catan_robber.glb'
-          };
-          Object.entries(mapPaths).forEach(([key, url]) => {
-            loader.load(url, (gltf) => {
-              if (gltf && gltf.scene) {
-                glbModels[key] = gltf.scene;
-                rebuild3DIslansScene();
-              }
-            }, undefined, () => {});
-          });
+      // ---- 地形の小物 ----
+      // taken に渡した点 (先に置いた小物) とも重ならないように散らす
+      function scatter(rng, count, minGap, rMin = 0.8, rMax = 1.38, taken = []) {
+        const pts = [];
+        let tries = 0;
+        while (pts.length < count && tries++ < 500) {
+          const a = rng() * Math.PI * 2;
+          // 盗賊の立ち位置の周りは空けておく
+          const d = Math.atan2(Math.sin(a - ROBBER_ANGLE), Math.cos(a - ROBBER_ANGLE));
+          if (Math.abs(d) < 0.5) continue;
+          const r = rMin + Math.sqrt(rng()) * (rMax - rMin);
+          const x = Math.cos(a) * r;
+          const z = Math.sin(a) * r;
+          if (pts.some((p) => Math.hypot(p.x - x, p.z - z) < minGap)) continue;
+          if (taken.some((p) => Math.hypot(p.x - x, p.z - z) < (p.gap || minGap))) continue;
+          pts.push({ x, z, gap: minGap });
         }
+        return pts;
+      }
 
-        // カメラ回転＆3Dクリック操作
-        let isDragging = false;
-        let dragDist = 0;
-        let prevX = 0;
-        let prevY = 0;
-        const raycaster = new THREE.Raycaster();
-        const mouse = new THREE.Vector2();
-
-        const dom = renderer.domElement;
-        dom.addEventListener('pointerdown', (e) => {
-          isDragging = true;
-          dragDist = 0;
-          prevX = e.clientX;
-          prevY = e.clientY;
-        });
-
-        window.addEventListener('pointermove', (e) => {
-          if (isDestroyed) return;
-          if (isDragging) {
-            const dx = e.clientX - prevX;
-            const dy = e.clientY - prevY;
-            dragDist += Math.abs(dx) + Math.abs(dy);
-            prevX = e.clientX;
-            prevY = e.clientY;
-            camSpherical.theta -= dx * 0.0065;
-            camSpherical.phi = Math.max(0.24, Math.min(1.26, camSpherical.phi - dy * 0.0065));
-            updateCamera();
+      function rockGeo(variant) {
+        return geoC(`cat-rock:${variant}`, () => {
+          const g = new THREE.DodecahedronGeometry(0.26, 0);
+          const rng = B3D.mulberry32(variant * 71 + 3);
+          const pos = g.attributes.position;
+          const offsets = new Map();
+          for (let i = 0; i < pos.count; i++) {
+            const key = `${pos.getX(i).toFixed(3)},${pos.getY(i).toFixed(3)},${pos.getZ(i).toFixed(3)}`;
+            if (!offsets.has(key)) offsets.set(key, [(rng() - 0.5) * 0.1, (rng() - 0.5) * 0.1, (rng() - 0.5) * 0.1]);
+            const d = offsets.get(key);
+            pos.setXYZ(i, pos.getX(i) + d[0], pos.getY(i) + d[1], pos.getZ(i) + d[2]);
           }
+          g.computeVertexNormals();
+          g.translate(0, 0.12, 0);
+          return g;
         });
+      }
 
-        window.addEventListener('pointerup', () => {
-          isDragging = false;
-        });
+      const moundGeo = () => geoC('cat-mound', () => new THREE.SphereGeometry(0.34, 20, 8, 0, Math.PI * 2, 0, Math.PI / 2));
 
-        dom.addEventListener('click', (e) => {
-          if (dragDist > 7) return;
-          const rect = dom.getBoundingClientRect();
-          mouse.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
-          mouse.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
-          raycaster.setFromCamera(mouse, camera);
-
-          const hits = raycaster.intersectObjects(interactiveObjects, true);
-          if (hits.length > 0) {
-            let obj = hits[0].object;
-            while (obj && (!obj.userData || !obj.userData.onClick)) {
-              obj = obj.parent;
-            }
-            if (obj && obj.userData && obj.userData.onClick) {
-              obj.userData.onClick();
-            }
-          }
-        });
-
-        dom.addEventListener('wheel', (e) => {
-          e.preventDefault();
-          camSpherical.radius = Math.max(11.0, Math.min(28.0, camSpherical.radius + e.deltaY * 0.01));
-          updateCamera();
-        }, { passive: false });
-
-        camResetBtn.onclick = () => {
-          camSpherical = { radius: 19.5, phi: 0.72, theta: 0 };
-          updateCamera();
+      function addProps(group, terrain, rng) {
+        const add = (mesh, x, z, rotY = rng() * Math.PI * 2) => {
+          mesh.position.set(x, TILE_TOP, z);
+          mesh.rotation.y = rotY;
+          mesh.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
+          group.add(mesh);
+          return mesh;
         };
 
-        window.addEventListener('resize', onResize);
-        updateCamera();
-        rebuild3DIslansScene();
-
-        function animate() {
-          if (isDestroyed) return;
-          animFrameId = requestAnimationFrame(animate);
-          renderer.render(scene, camera);
-        }
-        animate();
-      }
-
-      function updateCamera() {
-        if (!camera) return;
-        const { radius, phi, theta } = camSpherical;
-        camera.position.set(
-          radius * Math.sin(phi) * Math.sin(theta),
-          radius * Math.cos(phi),
-          radius * Math.sin(phi) * Math.cos(theta)
-        );
-        camera.lookAt(0, 0, 0);
-      }
-
-      function onResize() {
-        if (isDestroyed || !renderer || !camera) return;
-        const w = stageWrapEl.clientWidth || 960;
-        const h = stageWrapEl.clientHeight || 580;
-        camera.aspect = w / h;
-        camera.updateProjectionMatrix();
-        renderer.setSize(w, h);
-      }
-
-      // 3D地形ディテール生成（森の木々、山の岩峰、畑の麦、丘のレンガ、牧場の羊）
-      function createTerrainPropGroup(terrain) {
-        const g = new THREE.Group();
         if (terrain === 'wood') {
-          const offsets = [[-0.55, -0.45], [0.55, -0.4], [-0.45, 0.55], [0.5, 0.5]];
-          offsets.forEach(([ox, oz]) => {
-            const trunk = new THREE.Mesh(
-              new THREE.CylinderGeometry(0.06, 0.08, 0.22, 8),
-              new THREE.MeshStandardMaterial({ color: 0x78350f, roughness: 0.7 })
-            );
-            trunk.position.set(ox, 0.11, oz);
-            g.add(trunk);
-            const foliage = new THREE.Mesh(
-              new THREE.ConeGeometry(0.26, 0.55, 8),
-              new THREE.MeshStandardMaterial({ color: 0x166534, roughness: 0.45 })
-            );
-            foliage.position.set(ox, 0.42, oz);
-            foliage.castShadow = true;
-            g.add(foliage);
+          scatter(rng, 11, 0.3).forEach((p) => {
+            const tree = new THREE.Group();
+            const trunk = new THREE.Mesh(geoC('cat-trunk', () => new THREE.CylinderGeometry(0.022, 0.03, 0.1, 6).translate(0, 0.05, 0)), facet('#4a3424', 0.9));
+            const crown = new THREE.Mesh(geoC('cat-crown', () => st.geo.lathe([
+              [0, 0.06], [0.16, 0.08], [0.06, 0.2], [0.13, 0.19], [0.045, 0.31], [0.095, 0.3], [0, 0.46]
+            ], 8)), facet(rng() < 0.5 ? '#2c4a29' : '#39592f'));
+            tree.add(trunk, crown);
+            const s = 0.75 + rng() * 0.5;
+            tree.scale.set(s, s * (0.9 + rng() * 0.3), s);
+            add(tree, p.x, p.z);
           });
         } else if (terrain === 'ore') {
-          const peaks = [[-0.45, -0.35, 0.65], [0.48, -0.3, 0.52], [0.0, 0.52, 0.58]];
-          peaks.forEach(([ox, oz, h]) => {
-            const rock = new THREE.Mesh(
-              new THREE.ConeGeometry(0.36, h, 6),
-              new THREE.MeshStandardMaterial({ color: 0x475569, roughness: 0.4, metalness: 0.25 })
-            );
-            rock.position.set(ox, h / 2, oz);
-            rock.castShadow = true;
-            g.add(rock);
+          const peaks = scatter(rng, 3, 0.62, 0.8, 1.25);
+          peaks.forEach((p, i) => {
+            const peak = new THREE.Mesh(rockGeo(i % 3), facet(i === 0 ? '#7a7f85' : '#666b71', 0.92));
+            const s = 1.05 + rng() * 0.3;
+            peak.scale.set(s, s * (1.6 + rng() * 0.6), s);
+            add(peak, p.x, p.z);
+          });
+          scatter(rng, 4, 0.35, 0.8, 1.4, peaks).forEach((p, i) => {
+            const rock = new THREE.Mesh(rockGeo(3 + (i % 2)), facet('#80858b', 0.92));
+            const s = 0.35 + rng() * 0.25;
+            rock.scale.set(s, s, s);
+            add(rock, p.x, p.z);
           });
         } else if (terrain === 'brick') {
-          const mounds = [[-0.45, -0.35], [0.48, 0.38], [-0.35, 0.45]];
-          mounds.forEach(([ox, oz]) => {
-            const hill = new THREE.Mesh(
-              new THREE.CylinderGeometry(0.22, 0.34, 0.25, 10),
-              new THREE.MeshStandardMaterial({ color: 0x991b1b, roughness: 0.55 })
-            );
-            hill.position.set(ox, 0.125, oz);
-            hill.castShadow = true;
-            g.add(hill);
+          const pts = scatter(rng, 4, 0.55, 0.8, 1.3);
+          pts.slice(0, 3).forEach((p) => {
+            const mound = new THREE.Mesh(moundGeo(), facet('#9a5536', 0.95));
+            const s = 0.75 + rng() * 0.35;
+            mound.scale.set(s, s * 0.55, s * 0.85);
+            add(mound, p.x, p.z);
           });
+          // レンガの山
+          const stackPos = pts[3] || { x: -0.9, z: -0.6 };
+          const stack = new THREE.Group();
+          const brickGeo = geoC('cat-brick', () => st.geo.roundedBox(0.13, 0.055, 0.065, 0.012, 1).translate(0, 0.0275, 0));
+          const brickMat = st.kit.matte('#a5482f', { roughness: 0.9 });
+          [[-0.14, 0], [0, 0], [0.14, 0], [-0.07, 1], [0.07, 1], [0, 2]].forEach(([x, layer]) => {
+            const b = new THREE.Mesh(brickGeo, brickMat);
+            b.position.set(x, layer * 0.056, 0);
+            stack.add(b);
+          });
+          add(stack, stackPos.x, stackPos.z);
         } else if (terrain === 'sheep') {
-          const sheepPos = [[-0.45, -0.35], [0.45, -0.35], [0.4, 0.45]];
-          sheepPos.forEach(([ox, oz]) => {
-            const wool = new THREE.Mesh(
-              new THREE.SphereGeometry(0.16, 12, 10),
-              new THREE.MeshStandardMaterial({ color: 0xf8fafc, roughness: 0.6 })
-            );
-            wool.scale.set(1.25, 0.85, 1.0);
-            wool.position.set(ox, 0.14, oz);
-            wool.castShadow = true;
-            g.add(wool);
+          scatter(rng, 4, 0.42).forEach((p) => {
+            const sheep = new THREE.Group();
+            const body = new THREE.Mesh(geoC('cat-wool', () => new THREE.SphereGeometry(0.1, 14, 10)), st.kit.matte('#ece6d6', { roughness: 1 }));
+            body.scale.set(1.35, 0.95, 1);
+            body.position.y = 0.12;
+            const head = new THREE.Mesh(geoC('cat-head', () => new THREE.SphereGeometry(0.048, 12, 8)), st.kit.matte('#2b2522', { roughness: 0.8 }));
+            head.position.set(0.14, 0.15, 0);
+            head.scale.set(1.2, 1, 0.9);
+            const legGeo = geoC('cat-leg', () => new THREE.CylinderGeometry(0.014, 0.014, 0.08, 5).translate(0, 0.04, 0));
+            const legMat = st.kit.matte('#2b2522', { roughness: 0.8 });
+            [[0.07, 0.04], [0.07, -0.04], [-0.07, 0.04], [-0.07, -0.04]].forEach(([x, z]) => {
+              const leg = new THREE.Mesh(legGeo, legMat);
+              leg.position.set(x, 0, z);
+              sheep.add(leg);
+            });
+            sheep.add(body, head);
+            add(sheep, p.x, p.z);
           });
         } else if (terrain === 'wheat') {
-          const sheaves = [[-0.45, -0.38], [0.45, -0.38], [-0.42, 0.42], [0.42, 0.42]];
-          sheaves.forEach(([ox, oz]) => {
-            const bundle = new THREE.Mesh(
-              new THREE.CylinderGeometry(0.14, 0.18, 0.26, 10),
-              new THREE.MeshStandardMaterial({ color: 0xf59e0b, roughness: 0.45 })
-            );
-            bundle.position.set(ox, 0.13, oz);
-            bundle.castShadow = true;
-            g.add(bundle);
+          scatter(rng, 6, 0.36).forEach((p) => {
+            const sheaf = new THREE.Mesh(geoC('cat-sheaf', () => st.geo.lathe([
+              [0, 0], [0.065, 0], [0.045, 0.1], [0.04, 0.13], [0.08, 0.21], [0.06, 0.27], [0, 0.29]
+            ], 9)), facet('#d3a94f', 0.9));
+            const s = 0.85 + rng() * 0.35;
+            sheaf.scale.set(s, s, s);
+            add(sheaf, p.x, p.z);
+          });
+        } else if (terrain === 'desert') {
+          const dunes = scatter(rng, 3, 0.7, 0.8, 1.2);
+          dunes.forEach((p) => {
+            const dune = new THREE.Mesh(moundGeo(), st.kit.matte('#d9bf88', { roughness: 0.95 }));
+            const s = 0.85 + rng() * 0.3;
+            dune.scale.set(s * 1.5, s * 0.2, s * 0.8);
+            add(dune, p.x, p.z);
+          });
+          scatter(rng, 2, 0.4, 0.9, 1.35, dunes).forEach((p) => {
+            const rock = new THREE.Mesh(rockGeo(5), facet('#9c8566', 0.92));
+            rock.scale.set(0.3, 0.25, 0.3);
+            add(rock, p.x, p.z);
           });
         }
-        return g;
       }
 
-      // 数字チップ3Dディスク (256x256 CanvasTexture)
-      function createNumberToken3D(num) {
-        const c = document.createElement('canvas');
-        c.width = 256;
-        c.height = 256;
-        const ctx = c.getContext('2d');
-
-        ctx.fillStyle = '#fef3c7';
-        ctx.beginPath();
-        ctx.arc(128, 128, 118, 0, Math.PI * 2);
-        ctx.fill();
-
-        const isHot = num === 6 || num === 8;
-        ctx.strokeStyle = isHot ? '#dc2626' : '#b45309';
-        ctx.lineWidth = 12;
-        ctx.stroke();
-
-        ctx.fillStyle = isHot ? '#dc2626' : '#0f172a';
-        ctx.font = '900 108px "Noto Sans JP", sans-serif';
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.fillText(String(num), 128, 112);
-
-        const pips = 6 - Math.abs(7 - num);
-        const dots = '●'.repeat(pips);
-        ctx.font = '900 32px "Noto Sans JP", sans-serif';
-        ctx.fillText(dots, 128, 192);
-
-        const tex = new THREE.CanvasTexture(c);
-        tex.anisotropy = maxAniso;
-
-        const mesh = new THREE.Mesh(
-          new THREE.CylinderGeometry(0.54, 0.54, 0.12, 28),
-          [
-            new THREE.MeshStandardMaterial({ color: 0xd97706, roughness: 0.35 }),
-            new THREE.MeshStandardMaterial({ map: tex, roughness: 0.25 }),
-            new THREE.MeshStandardMaterial({ color: 0xd97706, roughness: 0.35 })
-          ]
-        );
-        mesh.castShadow = true;
-        return mesh;
+      // ---- タイル・チップ・港 ----
+      function tileGeo() {
+        return geoC('cat-tile', () => {
+          const bevel = 0.035;
+          const g = st.geo.slab(1, 1, TILE_TOP, { shape: hexShape(HEX_RADIUS * 0.965 - bevel, -30), bevel, bevelSegments: 3 });
+          return planarUV(g, HEX_RADIUS * 2);
+        });
       }
 
-      function createPlayerPiece3D(type, colorHex) {
-        const mat = new THREE.MeshStandardMaterial({ color: colorHex, roughness: 0.22, metalness: 0.18 });
-        if (glbModels[type]) {
-          const clone = glbModels[type].clone(true);
-          clone.traverse((c) => {
-            if (c.isMesh) {
-              c.material = mat;
-              c.castShadow = true;
-              c.receiveShadow = true;
-            }
-          });
-          return clone;
-        }
+      function makeNumberToken(n) {
         const g = new THREE.Group();
-        if (type === 'settlement') {
-          const base = new THREE.Mesh(new THREE.BoxGeometry(0.36, 0.26, 0.36), mat);
-          base.position.y = 0.13;
-          base.castShadow = true;
-          g.add(base);
-          const roof = new THREE.Mesh(new THREE.ConeGeometry(0.3, 0.24, 4), mat);
-          roof.rotation.y = Math.PI / 4;
-          roof.position.y = 0.38;
-          roof.castShadow = true;
-          g.add(roof);
-        } else if (type === 'city') {
-          const hall = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.28, 0.38), mat);
-          hall.position.y = 0.14;
-          hall.castShadow = true;
-          g.add(hall);
-          const tower = new THREE.Mesh(new THREE.BoxGeometry(0.26, 0.52, 0.38), mat);
-          tower.position.set(-0.12, 0.26, 0);
-          tower.castShadow = true;
-          g.add(tower);
-        } else if (type === 'road') {
-          const road = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.12, 0.78), mat);
-          road.position.y = 0.06;
-          road.castShadow = true;
-          g.add(road);
-        }
+        const body = new THREE.Mesh(geoC('cat-token', () => st.geo.disc(0.54, TOKEN_H, 0.022)), st.kit.matte('#e3d5b2', { roughness: 0.7 }));
+        body.castShadow = true;
+        body.receiveShadow = true;
+        const cap = new THREE.Mesh(
+          geoC('cat-token-cap', () => new THREE.CircleGeometry(0.518, 48).rotateX(-Math.PI / 2)),
+          st.kit.cached(`cat-token:${n}`, () => new THREE.MeshStandardMaterial({ map: st.kit.texture(tokenCanvas(B3D, n)), roughness: 0.62, envMapIntensity: 0.4 }))
+        );
+        cap.position.y = TOKEN_H / 2 + 0.0008;
+        g.add(body, cap);
+        g.position.y = TILE_TOP + TOKEN_H / 2;
         return g;
       }
 
-      function rebuild3DIslansScene() {
-        if (!THREE || !boardGroup) return;
-        while (boardGroup.children.length > 0) {
-          boardGroup.remove(boardGroup.children[0]);
+      function makeTile(h, rng) {
+        const g = new THREE.Group();
+        const tile = new THREE.Mesh(tileGeo(), terrainMats(h.terrain));
+        tile.position.y = TILE_TOP / 2;
+        tile.castShadow = true;
+        tile.receiveShadow = true;
+        g.add(tile);
+        addProps(g, h.terrain, rng);
+        if (h.number) g.add(makeNumberToken(h.number));
+        return g;
+      }
+
+      function makeHarbor(hb, i) {
+        const v1 = vertices[hb.v1];
+        const v2 = vertices[hb.v2];
+        const mx = (v1.x + v2.x) / 2;
+        const mz = (v1.z + v2.z) / 2;
+        const len = Math.hypot(mx, mz) || 1;
+        const hx = mx + (mx / len) * 0.95;
+        const hz = mz + (mz / len) * 0.95;
+
+        const g = new THREE.Group();
+        g.position.set(hx, 0, hz);
+        // 船着き場の板 (港を使える2つの交差点へ向けて)
+        const plankGeo = geoC('cat-plank', () => st.geo.roundedBox(0.15, 0.045, 1, 0.012, 1));
+        const plankMat = st.kit.wood('oak', { repeat: 0.6, seed: 31, clearcoat: 0.05, roughness: 0.7 });
+        [v1, v2].forEach((v) => {
+          const sx = v.x + (hx - v.x) * 0.16;
+          const sz = v.z + (hz - v.z) * 0.16;
+          const ex = v.x + (hx - v.x) * 0.66;
+          const ez = v.z + (hz - v.z) * 0.66;
+          const plank = new THREE.Mesh(plankGeo, plankMat);
+          plank.position.set((sx + ex) / 2 - hx, 0.03, (sz + ez) / 2 - hz);
+          plank.rotation.y = Math.atan2(ex - sx, ez - sz);
+          plank.scale.z = Math.hypot(ex - sx, ez - sz);
+          plank.castShadow = true;
+          plank.receiveShadow = true;
+          g.add(plank);
+        });
+        const token = new THREE.Group();
+        const body = new THREE.Mesh(geoC('cat-harbor-token', () => st.geo.disc(0.4, 0.06, 0.018)), st.kit.matte('#e3d5b2', { roughness: 0.7 }));
+        body.castShadow = true;
+        const cap = new THREE.Mesh(
+          geoC('cat-harbor-cap', () => new THREE.CircleGeometry(0.382, 48).rotateX(-Math.PI / 2)),
+          st.kit.cached(`cat-harbor:${hb.ratio}:${hb.res}`, () => new THREE.MeshStandardMaterial({ map: st.kit.texture(harborCanvas(B3D, hb.ratio, hb.res)), roughness: 0.62, envMapIntensity: 0.4 }))
+        );
+        cap.position.y = 0.0308;
+        token.add(body, cap);
+        token.position.y = 0.03;
+        g.add(token);
+        view.island.add(g);
+
+        g.scale.set(0.01, 0.01, 0.01);
+        st.animate(g, { scale: 1 }, { duration: 420, delay: 950 + i * 45, ease: 'outBack' });
+
+        if (hb.res) {
+          const lb = st.label(RES_META[hb.res].name, { className: 'cat-harbor', offsetY: 24 });
+          lb.at(hx, 0.05, hz);
+          view.labels.push(lb);
         }
-        interactiveObjects = [];
+      }
 
-        // 1. 19枚の3D地形ヘックス＋数字チップ＋盗賊
+      function buildSea() {
+        // 海 (天面に手描きの波) と、それを囲む木の外枠
+        const seaGeo = st.geo.slab(1, 1, 0.2, { shape: hexShape(SEA_R + 0.06, 0), bevel: 0.01, bevelSegments: 1 });
+        planarUV(seaGeo, (SEA_R + 0.1) * 2);
+        const sea = new THREE.Mesh(seaGeo, [
+          new THREE.MeshPhysicalMaterial({
+            map: st.kit.texture(seaCanvas(B3D)), roughness: 0.42, metalness: 0, clearcoat: 0.55, clearcoatRoughness: 0.25, envMapIntensity: 0.6
+          }),
+          st.kit.matte('#1b3a48')
+        ]);
+        sea.position.y = -0.1;
+        sea.receiveShadow = true;
+        st.root.add(sea);
+
+        const bevel = 0.06;
+        const frameShape = hexShape(SEA_R + 1.05 - bevel, 0);
+        frameShape.holes.push(hexPath(SEA_R + bevel, 0));
+        const frame = new THREE.Mesh(
+          st.geo.slab(1, 1, 0.46, { shape: frameShape, bevel, bevelSegments: 4 }),
+          st.kit.wood('walnut', { repeat: 0.14, seed: 19, clearcoat: 0.4 })
+        );
+        frame.position.y = 0.1 - 0.23;
+        frame.castShadow = true;
+        frame.receiveShadow = true;
+        st.root.add(frame);
+      }
+
+      function initStage(threeLib) {
+        THREE = threeLib;
+        st = B3D.createStage(THREE, stageWrapEl, {
+          embed: true,
+          radius: 28,
+          phi: 0.58,
+          extent: 11,
+          tableY: -0.36,
+          tableWood: 'darkWalnut',
+          minRadius: 12,
+          maxRadius: 40,
+          maxPhi: 1.2,
+          onFrame(now) {
+            if (view.pulse) view.pulse.opacity = 0.42 + 0.34 * (0.5 + 0.5 * Math.sin(now / 240));
+          }
+        });
+        view.island = new THREE.Group();
+        view.pieces = new THREE.Group();
+        view.targets = new THREE.Group();
+        st.root.add(view.island, view.pieces, view.targets);
+        view.pulse = targetMat();
+        buildSea();
+        B3D.current = st;
+      }
+
+      // ---- 盤面の同期 ----
+      function buildIsland() {
+        view.builtFor = hexes;
+        clearGhost();
+        st.clearGroup(view.island);
+        st.clearGroup(view.pieces);
+        st.clearGroup(view.targets);
+        view.tiles.clear();
+        view.buildings.clear();
+        view.roads.clear();
+        view.labels.forEach((lb) => lb.remove());
+        view.labels = [];
+        view.robber = null;
+        view.robberHex = -1;
+        view.pendingGains = [];
+        view.flashNumber = 0;
+
+        const seed = Math.floor(Math.random() * 1e9);
         hexes.forEach((h) => {
-          const rm = RES_META[h.terrain];
-          const hexGroup = new THREE.Group();
-          hexGroup.position.set(h.x, 0, h.z);
-
-          // 砂浜エッジ＋メイン地形ヘックス
-          const borderHex = new THREE.Mesh(
-            new THREE.CylinderGeometry(HEX_RADIUS * 0.99, HEX_RADIUS * 1.0, 0.16, 6),
-            new THREE.MeshStandardMaterial({ color: 0xfde68a, roughness: 0.55 })
-          );
-          borderHex.position.y = 0.08;
-          borderHex.receiveShadow = true;
-          hexGroup.add(borderHex);
-
-          const innerHex = new THREE.Mesh(
-            new THREE.CylinderGeometry(HEX_RADIUS * 0.91, HEX_RADIUS * 0.93, 0.22, 6),
-            new THREE.MeshStandardMaterial({ color: rm.hex, roughness: 0.48 })
-          );
-          innerHex.position.y = 0.11;
-          innerHex.receiveShadow = true;
-          hexGroup.add(innerHex);
-
-          // 地形3Dオブジェクト
-          const props = createTerrainPropGroup(h.terrain);
-          props.position.y = 0.22;
-          hexGroup.add(props);
-
-          // 数字チップ
-          if (h.number) {
-            const numMesh = createNumberToken3D(h.number);
-            numMesh.position.set(0, 0.26, 0);
-            hexGroup.add(numMesh);
-          }
-
-          // 盗賊3Dモデル
-          if (h.hasRobber) {
-            let robberObj;
-            if (glbModels.robber) {
-              robberObj = glbModels.robber.clone(true);
-            } else {
-              robberObj = new THREE.Mesh(
-                new THREE.CylinderGeometry(0.18, 0.28, 0.72, 16),
-                new THREE.MeshStandardMaterial({ color: 0x111827, roughness: 0.25, metalness: 0.5 })
-              );
-              robberObj.position.y = 0.36;
-            }
-            robberObj.position.set(0.32, 0.25, 0.15);
-            hexGroup.add(robberObj);
-          }
-
-          // 盗賊移動フェーズ中のクリックターゲット
-          if (phase === 'ROBBER_MOVE' && !h.hasRobber) {
-            const ring = new THREE.Mesh(
-              new THREE.CylinderGeometry(0.72, 0.72, 0.08, 24),
-              new THREE.MeshBasicMaterial({ color: 0xf43f5e, transparent: true, opacity: 0.72 })
-            );
-            ring.position.y = 0.36;
-            ring.userData = {
-              onClick: () => moveRobberToHex(players[turnIndex], h.id)
-            };
-            hexGroup.add(ring);
-            interactiveObjects.push(ring);
-          }
-
-          boardGroup.add(hexGroup);
+          const ring = Math.max(Math.abs(h.q), Math.abs(h.r), Math.abs(h.q + h.r));
+          const group = makeTile(h, B3D.mulberry32(seed + h.id * 7919));
+          group.position.set(h.x, 2.4 + ring * 0.5, h.z);
+          view.island.add(group);
+          view.tiles.set(h.id, group);
+          st.animate(group, { position: { y: 0 } }, { duration: 560, delay: 100 + ring * 140 + (h.id % 4) * 30, ease: 'outCubic' });
         });
+        harbors.forEach((hb, i) => makeHarbor(hb, i));
+      }
 
-        // 2. 9箇所の港ビルボードラベル
-        harbors.forEach((hb) => {
-          const c = document.createElement('canvas');
-          c.width = 220;
-          c.height = 84;
-          const ctx = c.getContext('2d');
-          ctx.fillStyle = 'rgba(15, 23, 42, 0.9)';
-          ctx.strokeStyle = '#38bdf8';
-          ctx.lineWidth = 6;
-          ctx.fillRect(4, 4, 212, 76);
-          ctx.strokeRect(4, 4, 212, 76);
-          ctx.fillStyle = '#fef08a';
-          ctx.font = '900 34px "Noto Sans JP", sans-serif';
-          ctx.textAlign = 'center';
-          ctx.textBaseline = 'middle';
-          ctx.fillText(hb.label, 110, 42);
+      const robberSpot = (h) => ({ x: h.x + Math.cos(ROBBER_ANGLE) * ROBBER_R, z: h.z + Math.sin(ROBBER_ANGLE) * ROBBER_R });
 
-          const tex = new THREE.CanvasTexture(c);
-          const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true }));
-          sp.scale.set(1.45, 0.56, 1);
-          sp.position.set(hb.x, 0.55, hb.z);
-          boardGroup.add(sp);
-        });
+      function syncRobber() {
+        const h = hexes.find((x) => x.hasRobber);
+        if (!h) return;
+        const spot = robberSpot(h);
+        if (!view.robber) {
+          view.robber = new THREE.Mesh(robberGeo(), st.kit.matte('#34302c', { roughness: 0.55 }));
+          view.robber.castShadow = true;
+          view.robber.receiveShadow = true;
+          view.robber.position.set(spot.x, TILE_TOP + 2.4, spot.z);
+          view.island.add(view.robber);
+          st.animate(view.robber, { position: { y: TILE_TOP } }, { duration: 560, delay: 1150, ease: 'outBounce' });
+          view.robberHex = h.id;
+        } else if (view.robberHex !== h.id) {
+          view.robberHex = h.id;
+          st.animate(view.robber, { position: { x: spot.x, y: TILE_TOP, z: spot.z } }, { duration: 680, arc: 1.5, ease: 'inOutCubic' });
+        }
+      }
 
-        // 3. 建設済み街道 ＆ 建設可能街道の3D発光マーカー
-        const activeP = players[turnIndex];
-        const showRoadTargets = activeP && !activeP.isCpu && (
-          (phase === 'SETUP' && setupSubPhase === 'ROAD') ||
-          (phase === 'FREE_ROADS') ||
-          (phase === 'MAIN' && buildMode === 'road')
-        );
-        const validRoadIds = showRoadTargets
-          ? new Set(getValidRoadEdges(activeP.idx, phase === 'SETUP' ? lastSetupVertexId : null))
-          : new Set();
+      const buildingYaw = (v) => Math.atan2(v.x, v.z);
 
-        edges.forEach((e) => {
-          if (e.roadOwner !== null) {
-            const roadObj = createPlayerPiece3D('road', PLAYER_THEMES[e.roadOwner].hex);
-            roadObj.position.set(e.x, 0.2, e.z);
-            roadObj.rotation.y = e.angleY;
-            boardGroup.add(roadObj);
-          } else if (validRoadIds.has(e.id)) {
-            const marker = new THREE.Mesh(
-              new THREE.BoxGeometry(0.24, 0.16, 0.78),
-              new THREE.MeshBasicMaterial({ color: 0x38bdf8, transparent: true, opacity: 0.82 })
-            );
-            marker.position.set(e.x, 0.25, e.z);
-            marker.rotation.y = e.angleY;
-            marker.userData = {
-              onClick: () => handleEdgeClick(e.id)
-            };
-            boardGroup.add(marker);
-            interactiveObjects.push(marker);
-          }
-        });
+      function makeBuilding(type, owner) {
+        const g = new THREE.Group();
+        const mesh = new THREE.Mesh(type === 'city' ? cityGeo() : houseGeo(), pieceMat(owner));
+        mesh.castShadow = true;
+        mesh.receiveShadow = true;
+        const shadow = st.markers.contact(type === 'city' ? 0.8 : 0.52, type === 'city' ? 0.56 : 0.48, 0.5);
+        shadow.position.y = 0.004;
+        g.add(shadow, mesh);
+        return g;
+      }
 
-        // 4. 建設済み開拓地・都市 ＆ 建設可能頂点の3D発光スフィア
-        const showSettleTargets = activeP && !activeP.isCpu && (
-          (phase === 'SETUP' && setupSubPhase === 'SETTLEMENT') ||
-          (phase === 'MAIN' && buildMode === 'settlement')
-        );
-        const validSettleIds = showSettleTargets
-          ? new Set(getValidSettlementVertices(activeP.idx, phase === 'SETUP'))
-          : new Set();
+      function dropIn(obj, order, ease = 'outBounce') {
+        const y = obj.position.y;
+        obj.position.y = y + 1.2;
+        st.animate(obj, { position: { y } }, { duration: 460, delay: Math.min(order * 70, 1100), ease });
+      }
 
-        const showCityTargets = activeP && !activeP.isCpu && phase === 'MAIN' && buildMode === 'city';
-        const validCityIds = showCityTargets ? new Set(getValidCityVertices(activeP.idx)) : new Set();
-
+      function syncPieces() {
+        let order = 0;
+        const seenV = new Set();
         vertices.forEach((v) => {
-          if (v.building) {
-            const pHex = PLAYER_THEMES[v.building.owner].hex;
-            const bObj = createPlayerPiece3D(v.building.type, pHex);
-            bObj.position.set(v.x, 0.2, v.z);
-            if (validCityIds.has(v.id)) {
-              const ring = new THREE.Mesh(
-                new THREE.CylinderGeometry(0.42, 0.42, 0.12, 20),
-                new THREE.MeshBasicMaterial({ color: 0xfde047 })
-              );
-              ring.position.y = 0.04;
-              bObj.add(ring);
-              bObj.userData = { onClick: () => handleVertexClick(v.id) };
-              interactiveObjects.push(bObj);
-            }
-            boardGroup.add(bObj);
-          } else if (validSettleIds.has(v.id)) {
-            const sphere = new THREE.Mesh(
-              new THREE.SphereGeometry(0.26, 16, 16),
-              new THREE.MeshBasicMaterial({ color: 0x10b981, transparent: true, opacity: 0.88 })
-            );
-            sphere.position.set(v.x, 0.34, v.z);
-            sphere.userData = {
-              onClick: () => handleVertexClick(v.id)
-            };
-            boardGroup.add(sphere);
-            interactiveObjects.push(sphere);
+          if (!v.building) return;
+          seenV.add(v.id);
+          const cur = view.buildings.get(v.id);
+          if (cur && cur.type === v.building.type && cur.owner === v.building.owner) return;
+          if (cur) st.removeObject(cur.obj);
+          const obj = makeBuilding(v.building.type, v.building.owner);
+          obj.position.set(v.x, TILE_TOP, v.z);
+          obj.rotation.y = buildingYaw(v);
+          view.pieces.add(obj);
+          view.buildings.set(v.id, { obj, type: v.building.type, owner: v.building.owner });
+          if (cur) {
+            // 開拓地 → 都市はその場で入れ替わるように
+            obj.scale.set(0.5, 0.5, 0.5);
+            st.animate(obj, { scale: 1 }, { duration: 420, ease: 'outBack' });
+          } else {
+            dropIn(obj, order++);
+          }
+        });
+        view.buildings.forEach((b, id) => {
+          if (!seenV.has(id)) {
+            st.removeObject(b.obj);
+            view.buildings.delete(id);
+          }
+        });
+
+        const seenE = new Set();
+        edges.forEach((e) => {
+          if (e.roadOwner === null) return;
+          seenE.add(e.id);
+          const cur = view.roads.get(e.id);
+          if (cur && cur.owner === e.roadOwner) return;
+          if (cur) st.removeObject(cur.obj);
+          const obj = new THREE.Mesh(roadGeo(), pieceMat(e.roadOwner));
+          obj.castShadow = true;
+          obj.receiveShadow = true;
+          obj.position.set(e.x, TILE_TOP, e.z);
+          obj.rotation.y = e.angleY;
+          view.pieces.add(obj);
+          view.roads.set(e.id, { obj, owner: e.roadOwner });
+          dropIn(obj, order++);
+        });
+        view.roads.forEach((r, id) => {
+          if (!seenE.has(id)) {
+            st.removeObject(r.obj);
+            view.roads.delete(id);
           }
         });
       }
 
+      // ---- 置ける場所の印とホバーの見本 ----
+      function clearGhost() {
+        if (view.ghost) {
+          st.removeObject(view.ghost);
+          view.ghost = null;
+        }
+        if (view.hiddenBuilding) {
+          view.hiddenBuilding.visible = true;
+          view.hiddenBuilding = null;
+        }
+        if (view.raisedTile) {
+          st.animate(view.raisedTile, { position: { y: 0 } }, { duration: 220 });
+          view.raisedTile = null;
+        }
+      }
+
+      function showGhost(kind, owner, x, z, yaw) {
+        clearGhost();
+        const geom = kind === 'road' ? roadGeo() : kind === 'city' ? cityGeo() : kind === 'robber' ? robberGeo() : houseGeo();
+        const mat = kind === 'robber' ? st.kit.ghostSolid('#2b2724', 0.5) : st.kit.ghostSolid(PLAYER_THEMES[owner].color, 0.6);
+        const m = new THREE.Mesh(geom, mat);
+        m.position.set(x, TILE_TOP, z);
+        m.rotation.y = yaw || 0;
+        m.renderOrder = 4;
+        view.targets.add(m);
+        view.ghost = m;
+      }
+
+      function addVertexTarget(v, p, kind) {
+        const big = kind === 'city';
+        const ring = new THREE.Mesh(
+          geoC(big ? 'cat-tgt-ring-l' : 'cat-tgt-ring', () => new THREE.RingGeometry(big ? 0.3 : 0.13, big ? 0.35 : 0.19, 40).rotateX(-Math.PI / 2)),
+          view.pulse
+        );
+        ring.position.set(v.x, TILE_TOP + 0.015, v.z);
+        ring.renderOrder = 3;
+        view.targets.add(ring);
+        if (!big) {
+          const dot = new THREE.Mesh(geoC('cat-tgt-dot', () => new THREE.CircleGeometry(0.055, 24).rotateX(-Math.PI / 2)), view.pulse);
+          dot.position.set(v.x, TILE_TOP + 0.016, v.z);
+          dot.renderOrder = 3;
+          view.targets.add(dot);
+        }
+        const hit = new THREE.Mesh(geoC('cat-hit-v', () => new THREE.CylinderGeometry(0.34, 0.34, 0.7, 12)), st.kit.invisible());
+        hit.position.set(v.x, TILE_TOP + 0.3, v.z);
+        view.targets.add(hit);
+        st.pick(hit, {
+          onHover: () => {
+            showGhost(kind, p.idx, v.x, v.z, buildingYaw(v));
+            if (big && view.buildings.has(v.id)) {
+              view.hiddenBuilding = view.buildings.get(v.id).obj;
+              view.hiddenBuilding.visible = false;
+            }
+          },
+          onLeave: clearGhost,
+          onClick: () => handleVertexClick(v.id)
+        });
+      }
+
+      function addEdgeTarget(e, p) {
+        const bar = new THREE.Mesh(geoC('cat-tgt-bar', () => new THREE.PlaneGeometry(0.075, ROAD_LEN * 0.86).rotateX(-Math.PI / 2)), view.pulse);
+        bar.position.set(e.x, TILE_TOP + 0.015, e.z);
+        bar.rotation.y = e.angleY;
+        bar.renderOrder = 3;
+        const hit = new THREE.Mesh(geoC('cat-hit-e', () => new THREE.BoxGeometry(0.4, 0.4, ROAD_LEN)), st.kit.invisible());
+        hit.position.set(e.x, TILE_TOP + 0.15, e.z);
+        hit.rotation.y = e.angleY;
+        view.targets.add(bar, hit);
+        st.pick(hit, {
+          onHover: () => showGhost('road', p.idx, e.x, e.z, e.angleY),
+          onLeave: clearGhost,
+          onClick: () => handleEdgeClick(e.id)
+        });
+      }
+
+      function addRobberTarget(h, p) {
+        const ring = new THREE.Mesh(geoC('cat-tgt-hex', () => new THREE.RingGeometry(0.64, 0.71, 48).rotateX(-Math.PI / 2)), view.pulse);
+        ring.position.set(h.x, TILE_TOP + (h.number ? TOKEN_H : 0) + 0.012, h.z);
+        ring.renderOrder = 3;
+        const hit = new THREE.Mesh(
+          geoC('cat-hit-hex', () => new THREE.CircleGeometry(HEX_RADIUS * 0.92, 6).rotateX(-Math.PI / 2).rotateY(Math.PI / 6)),
+          st.kit.invisible()
+        );
+        hit.position.set(h.x, TILE_TOP + 0.02, h.z);
+        view.targets.add(ring, hit);
+        st.pick(hit, {
+          onHover: () => {
+            const spot = robberSpot(h);
+            showGhost('robber', p.idx, spot.x, spot.z, 0);
+            const tile = view.tiles.get(h.id);
+            if (tile) {
+              view.raisedTile = tile;
+              st.animate(tile, { position: { y: 0.08 } }, { duration: 200 });
+            }
+          },
+          onLeave: clearGhost,
+          onClick: () => moveRobberToHex(players[turnIndex], h.id)
+        });
+      }
+
+      function syncTargets() {
+        clearGhost();
+        st.clearGroup(view.targets);
+        const p = players[turnIndex];
+        if (!p || p.isCpu || phase === 'GAME_OVER') {
+          st.refreshHover();
+          return;
+        }
+
+        if (phase === 'ROBBER_MOVE') {
+          hexes.forEach((h) => { if (!h.hasRobber) addRobberTarget(h, p); });
+        }
+
+        let settleIds = [];
+        if (phase === 'SETUP' && setupSubPhase === 'SETTLEMENT') settleIds = getValidSettlementVertices(p.idx, true);
+        else if (phase === 'MAIN' && buildMode === 'settlement') settleIds = getValidSettlementVertices(p.idx, false);
+        settleIds.forEach((id) => addVertexTarget(vertices[id], p, 'settlement'));
+
+        if (phase === 'MAIN' && buildMode === 'city') {
+          getValidCityVertices(p.idx).forEach((id) => addVertexTarget(vertices[id], p, 'city'));
+        }
+
+        let roadIds = [];
+        if (phase === 'SETUP' && setupSubPhase === 'ROAD') roadIds = getValidRoadEdges(p.idx, lastSetupVertexId);
+        else if (phase === 'FREE_ROADS' || (phase === 'MAIN' && buildMode === 'road')) roadIds = getValidRoadEdges(p.idx);
+        roadIds.forEach((id) => addEdgeTarget(edges[id], p));
+
+        st.refreshHover();
+      }
+
+      // ---- 出目の演出 (産出したタイルが跳ね、建物の上に獲得量が浮かぶ) ----
+      function floatLabel(x, y, z, text, color, delay) {
+        const lb = st.label('', { className: 'cat-gain' });
+        lb.el.innerHTML = `<span style="--c:${color};animation-delay:${delay}ms">${text}</span>`;
+        lb.at(x, y, z);
+        setTimeout(() => lb.remove(), 1800 + delay);
+      }
+
+      function flushEffects() {
+        if (view.flashNumber) {
+          const n = view.flashNumber;
+          view.flashNumber = 0;
+          hexes.forEach((h) => {
+            if (h.number !== n || h.hasRobber) return;
+            const tile = view.tiles.get(h.id);
+            if (!tile) return;
+            st.animate(tile, { position: { y: 0.18 } }, {
+              duration: 180,
+              ease: 'outCubic',
+              complete: () => st.animate(tile, { position: { y: 0 } }, { duration: 460, ease: 'outBounce' })
+            });
+          });
+        }
+        const stackAt = new Map();
+        view.pendingGains.forEach((g, i) => {
+          const v = vertices[g.vid];
+          if (!v) return;
+          const k = stackAt.get(g.vid) || 0;
+          stackAt.set(g.vid, k + 1);
+          floatLabel(v.x, TILE_TOP + 0.75 + k * 0.32, v.z, `${RES_META[g.terrain].name} +${g.amt}`, RES_META[g.terrain].color, 260 + i * 70);
+        });
+        view.pendingGains = [];
+      }
+
+      function syncScene() {
+        if (!st) return;
+        if (view.builtFor !== hexes) buildIsland();
+        syncRobber();
+        syncPieces();
+        syncTargets();
+        flushEffects();
+      }
+
       // ====================================================
-      // 6. UIレンダリング
+      // 6. 操作パネル
       // ====================================================
+      const PIPS = { 1: [4], 2: [0, 8], 3: [0, 4, 8], 4: [0, 2, 6, 8], 5: [0, 2, 4, 6, 8], 6: [0, 2, 3, 5, 6, 8] };
+      const dieFace = (n) => Array.from({ length: 9 }, (_, i) => `<i${PIPS[n].includes(i) ? ' class="on"' : ''}></i>`).join('');
+
       function renderAll() {
-        // 1. 上部プレイヤーカード
+        // 1. プレイヤー
         playersRowEl.innerHTML = players.map((p) => {
           const isTurn = p.idx === turnIndex && phase !== 'GAME_OVER';
-          const vp = calcPlayerVP(p);
-          const roadLen = computeLongestRoadForPlayer(p.idx);
           const awards = [];
-          if (longestRoadHolder === p.idx) awards.push(`<span class="cat-award-badge">🛣️最長路(2VP)</span>`);
-          if (largestArmyHolder === p.idx) awards.push(`<span class="cat-award-badge">⚔️最大騎士(2VP)</span>`);
-
+          if (longestRoadHolder === p.idx) awards.push('最長交易路');
+          if (largestArmyHolder === p.idx) awards.push('最大騎士力');
           return `
-            <div class="cat-pcard ${isTurn ? 'active-turn' : ''}">
-              <span style="font-weight:900;color:${p.css};">${isTurn ? '▶ ' : ''}${p.name}</span>
-              <span class="cat-vp-pill">🏆 ${vp}/10 VP</span>
-              <span style="color:#cbd5e1;">🃏資源:${totalRes(p)}枚 / 発展:${p.devCards.length}枚 / ⚔️:${p.knightsPlayed} / 🛣️:${roadLen}</span>
-              ${awards.join(' ')}
+            <div class="cat-player ${isTurn ? 'is-turn' : ''}">
+              <span class="cat-swatch" style="--c:${p.color}"></span>
+              <div>
+                <div class="cat-player-name">
+                  <span>${p.name}</span>
+                  <span class="cat-player-vp">${calcPlayerVP(p)}<small>点</small></span>
+                  ${awards.map((a) => `<span class="cat-award">${a}</span>`).join('')}
+                </div>
+                <div class="cat-player-sub">資源 ${totalRes(p)} · 発展 ${p.devCards.length} · 騎士 ${p.knightsPlayed} · 交易路 ${computeLongestRoadForPlayer(p.idx)}</div>
+              </div>
             </div>
           `;
         }).join('');
 
-        // 2. ダイス＆バナー
-        die1El.textContent = lastDice[0];
-        die2El.textContent = lastDice[1];
-        diceSumEl.textContent = `(${lastDice[0] + lastDice[1]})`;
+        // 2. サイコロと状況
+        die1El.innerHTML = dieFace(lastDice[0]);
+        die2El.innerHTML = dieFace(lastDice[1]);
+        diceSumEl.textContent = hasRolled ? String(lastDice[0] + lastDice[1]) : '–';
+        diceBoxEl.classList.toggle('is-idle', !hasRolled);
+        if (diceJustRolled) {
+          diceJustRolled = false;
+          diceBoxEl.classList.remove('is-rolling');
+          void diceBoxEl.offsetWidth;
+          diceBoxEl.classList.add('is-rolling');
+        }
         bannerEl.textContent = statusBannerText;
 
-        // 3. 自分の資源カード一覧
+        // 3. 自分の資源
         const me = players[mySeat] || players[0];
         if (me) {
           const rates = getTradeRates(me);
-          resHandEl.innerHTML = RES_TYPES.map((k) => {
-            const rm = RES_META[k];
-            return `
-              <div class="cat-res-card" style="background:${rm.css};">
-                <span>${rm.icon} ${rm.name}: <b>${me.res[k]}</b></span>
-                <span style="font-size:10px;opacity:0.85;">(${rates[k]}:1)</span>
-              </div>
-            `;
-          }).join('');
+          resHandEl.innerHTML = RES_TYPES.map((k) => `
+            <div class="cat-res ${me.res[k] ? '' : 'is-empty'}" style="--c:${RES_META[k].color}">
+              <span class="cat-res-name">${RES_META[k].name}</span>
+              <b>${me.res[k]}</b>
+              <small>${rates[k]}:1</small>
+            </div>
+          `).join('');
         }
 
-        // 4. アクションボタンバー
+        // 4. 操作
         const activeP = players[turnIndex];
         const isMyTurn = activeP && !activeP.isCpu && phase !== 'GAME_OVER';
 
-        if (!isMyTurn) {
-          actionsBarEl.innerHTML = `<span style="color:#94a3b8;font-size:12px;">⏳ ${activeP ? activeP.name : ''} の行動中...</span>`;
+        if (phase === 'GAME_OVER') {
+          actionsBarEl.innerHTML = `<button class="cat-btn" id="cat-again-btn">新しい島で始める</button>`;
+          actionsBarEl.querySelector('#cat-again-btn').onclick = () => initGame(false);
+        } else if (!isMyTurn) {
+          actionsBarEl.innerHTML = `<span class="cat-wait">${activeP ? activeP.name : ''}の手番です</span>`;
         } else if (phase === 'SETUP') {
-          actionsBarEl.innerHTML = `
-            <span style="font-size:12px;font-weight:900;color:#34d399;">
-              🚩 初期配置：盤上の光っている${setupSubPhase === 'SETTLEMENT' ? '緑色の交差点（開拓地）' : '水色の辺（街道）'}をクリック！
-            </span>
-          `;
+          actionsBarEl.innerHTML = `<span class="cat-prompt">${setupSubPhase === 'SETTLEMENT' ? '開拓地を置く交差点を選んでください' : '街道を置く道を選んでください'}</span>`;
         } else if (phase === 'ROLL') {
           actionsBarEl.innerHTML = `
-            <button class="cat-btn cat-btn-gold" id="cat-roll-btn" style="font-size:14px;padding:7px 18px;">🎲 ダイスを振る！</button>
-            <button class="cat-btn" id="cat-dev-btn">🃏 発展カード (${activeP.devCards.length})</button>
+            <button class="cat-btn" id="cat-dev-btn">発展カード ${activeP.devCards.length ? `(${activeP.devCards.length})` : ''}</button>
+            <button class="cat-btn is-primary" id="cat-roll-btn">サイコロを振る</button>
           `;
           actionsBarEl.querySelector('#cat-roll-btn').onclick = rollDiceAction;
           actionsBarEl.querySelector('#cat-dev-btn').onclick = () => openDevCardsModal(activeP);
         } else if (phase === 'ROBBER_MOVE') {
-          actionsBarEl.innerHTML = `<span style="color:#fb7185;font-weight:900;font-size:13px;">🦹 盤上の赤いリングが表示されているタイルをクリックして盗賊を移動してください！</span>`;
+          actionsBarEl.innerHTML = `<span class="cat-prompt">盗賊を動かすタイルを選んでください</span>`;
         } else if (phase === 'FREE_ROADS') {
-          actionsBarEl.innerHTML = `<span style="color:#38bdf8;font-weight:900;font-size:13px;">🛣️ 無料で建設する街道（残り${freeRoadsRemaining}本）の水色マーカーをクリック！</span>`;
+          actionsBarEl.innerHTML = `<span class="cat-prompt">街道を置く道を選んでください（残り${freeRoadsRemaining}本）</span>`;
         } else if (phase === 'MAIN') {
           const okRoad = canAffordRoad(activeP);
           const okSettle = canAffordSettlement(activeP);
           const okCity = canAffordCity(activeP);
-          const okDev = canAffordDevCard(activeP);
 
           actionsBarEl.innerHTML = `
-            <button class="cat-btn ${buildMode === 'road' ? 'active-mode' : ''}" id="cat-b-road" ${okRoad ? '' : 'disabled'} title="コスト: 木1・土1">
-              🛣️ 街道 (🌲1🧱1)
-            </button>
-            <button class="cat-btn ${buildMode === 'settlement' ? 'active-mode' : ''}" id="cat-b-settle" ${okSettle ? '' : 'disabled'} title="コスト: 木1・土1・羊1・麦1">
-              🏠 開拓地 (🌲1🧱1🐑1🌾1)
-            </button>
-            <button class="cat-btn ${buildMode === 'city' ? 'active-mode' : ''}" id="cat-b-city" ${okCity ? '' : 'disabled'} title="コスト: 麦2・鉄3">
-              🏰 都市化 (🌾2⛰️3)
-            </button>
-            <button class="cat-btn" id="cat-b-dev" title="発展カード購入(羊1・麦1・鉄1) / 使用">
-              🃏 発展カード (${activeP.devCards.length}) ${okDev ? '✨引ける' : ''}
-            </button>
-            <button class="cat-btn" id="cat-b-trade">
-              ⛵ 港貿易・🤝交渉
-            </button>
-            <button class="cat-btn cat-btn-emerald" id="cat-end-turn">
-              ⏭️ ターン終了
-            </button>
+            <button class="cat-btn ${buildMode === 'road' ? 'is-active' : ''}" id="cat-b-road" ${okRoad ? '' : 'disabled'} title="費用: ${costText('road')}">街道 ${costDots('road')}</button>
+            <button class="cat-btn ${buildMode === 'settlement' ? 'is-active' : ''}" id="cat-b-settle" ${okSettle ? '' : 'disabled'} title="費用: ${costText('settlement')}">開拓地 ${costDots('settlement')}</button>
+            <button class="cat-btn ${buildMode === 'city' ? 'is-active' : ''}" id="cat-b-city" ${okCity ? '' : 'disabled'} title="費用: ${costText('city')}">都市 ${costDots('city')}</button>
+            <button class="cat-btn" id="cat-b-dev">発展カード ${activeP.devCards.length ? `(${activeP.devCards.length})` : ''}</button>
+            <button class="cat-btn" id="cat-b-trade">交易</button>
+            <button class="cat-btn is-primary" id="cat-end-turn">手番を終える</button>
           `;
 
-          const roadBtn = actionsBarEl.querySelector('#cat-b-road');
-          if (roadBtn && okRoad) {
-            roadBtn.onclick = () => {
-              buildMode = buildMode === 'road' ? null : 'road';
-              statusBannerText = buildMode === 'road' ? '🛣️ 盤上の水色に光る辺をクリックして街道を建設してください。' : '建設モードを解除しました。';
-              renderAll();
-            };
-          }
-          const settleBtn = actionsBarEl.querySelector('#cat-b-settle');
-          if (settleBtn && okSettle) {
-            settleBtn.onclick = () => {
-              buildMode = buildMode === 'settlement' ? null : 'settlement';
-              statusBannerText = buildMode === 'settlement' ? '🏠 盤上の緑色に光る交差点をクリックして開拓地を建設してください。' : '建設モードを解除しました。';
-              renderAll();
-            };
-          }
-          const cityBtn = actionsBarEl.querySelector('#cat-b-city');
-          if (cityBtn && okCity) {
-            cityBtn.onclick = () => {
-              buildMode = buildMode === 'city' ? null : 'city';
-              statusBannerText = buildMode === 'city' ? '🏰 都市にアップグレードする自分の開拓地（黄色リング）をクリックしてください。' : '建設モードを解除しました。';
-              renderAll();
-            };
-          }
+          const toggleMode = (mode, prompt) => {
+            buildMode = buildMode === mode ? null : mode;
+            statusBannerText = buildMode === mode ? prompt : '建設をやめました。';
+            renderAll();
+          };
+          if (okRoad) actionsBarEl.querySelector('#cat-b-road').onclick = () => toggleMode('road', '街道を置く道を選んでください。');
+          if (okSettle) actionsBarEl.querySelector('#cat-b-settle').onclick = () => toggleMode('settlement', '開拓地を建てる交差点を選んでください。');
+          if (okCity) actionsBarEl.querySelector('#cat-b-city').onclick = () => toggleMode('city', '都市にする開拓地を選んでください。');
           actionsBarEl.querySelector('#cat-b-dev').onclick = () => openDevCardsModal(activeP);
           actionsBarEl.querySelector('#cat-b-trade').onclick = () => openTradeModal(activeP);
           actionsBarEl.querySelector('#cat-end-turn').onclick = endTurn;
         }
 
-        rebuild3DIslansScene();
+        syncScene();
       }
 
       pcountSelEl.onchange = () => initGame(false);
       fastSetupBtnEl.onclick = () => initGame(true);
       newBtnEl.onclick = () => initGame(false);
 
-      ensureThreeLoaded().then((threeLib) => {
-        if (isDestroyed) return;
-        init3DStage(threeLib);
+      B3D.ensureThree().then((threeLib) => {
+        if (isDestroyed || !threeLib) return;
+        initStage(threeLib);
         initGame(false);
       });
 
       return () => {
         isDestroyed = true;
         if (cpuTimer) clearTimeout(cpuTimer);
-        if (animFrameId) cancelAnimationFrame(animFrameId);
-        window.removeEventListener('resize', onResize);
-        if (renderer) renderer.dispose();
+        if (st) {
+          if (B3D.current === st) B3D.current = null;
+          st.destroy();
+        }
       };
     }
   });

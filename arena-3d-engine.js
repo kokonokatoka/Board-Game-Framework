@@ -570,12 +570,14 @@
    *   tableWood            天板の樹種
    *   compact, height      ステージの高さ
    *   hudLeft              視点ボタンを左上に置く (ゲーム側のボタンと重なる場合)
+   *   embed                targetEl の中にステージを置く (独自3Dのゲーム用。2D 盤面との切り替えはなし)
+   *   onFrame(now, dt)     毎フレームの描画前に呼ぶ
    */
   function createStage(THREE, targetEl, opts = {}) {
     injectCSS();
 
     const host = document.createElement('div');
-    host.className = 'ba3d-stage' + (opts.compact ? ' is-compact' : '') + (opts.hudLeft ? ' is-hud-left' : '');
+    host.className = 'ba3d-stage' + (opts.compact ? ' is-compact' : '') + (opts.hudLeft ? ' is-hud-left' : '') + (opts.embed ? ' is-embedded' : '');
     if (opts.height) host.style.height = opts.height;
 
     const overlay = document.createElement('div');
@@ -590,7 +592,8 @@
     const flatBtn = document.createElement('button');
     flatBtn.className = 'ba3d-btn';
     flatBtn.textContent = '2D表示';
-    hud.append(viewBtn, flatBtn);
+    hud.append(viewBtn);
+    if (!opts.embed) hud.append(flatBtn);
     host.appendChild(hud);
 
     const hint = document.createElement('div');
@@ -598,8 +601,12 @@
     hint.textContent = 'ドラッグで回転　·　ホイールで拡大';
     host.appendChild(hint);
 
-    targetEl.parentNode.insertBefore(host, targetEl);
-    targetEl.classList.add('ba3d-hidden-2d');
+    if (opts.embed) {
+      targetEl.appendChild(host);
+    } else {
+      targetEl.parentNode.insertBefore(host, targetEl);
+      targetEl.classList.add('ba3d-hidden-2d');
+    }
 
     // ---- レンダラー ----
     const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, powerPreference: 'high-performance' });
@@ -698,6 +705,8 @@
     const kit = {
       color,
       texture,
+      // ゲーム固有の共有材質もここに預ければ removeObject で破棄されない
+      cached,
       // 木: repeat はワールド単位あたりの繰り返し (Extrude の UV はワールド座標のため)
       wood(species, o = {}) {
         const seed = o.seed ?? 7;
@@ -935,7 +944,10 @@
     }
 
     canvas.addEventListener('pointerdown', (e) => {
-      canvas.setPointerCapture(e.pointerId);
+      // 捕捉できないポインタ (合成イベントなど) でもクリックとして扱えるようにする
+      try {
+        canvas.setPointerCapture(e.pointerId);
+      } catch (err) {}
       pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
       if (pointers.size === 1) {
         downAt = { x: e.clientX, y: e.clientY };
@@ -1342,6 +1354,7 @@
     registerAdapter(id, mount) {
       adapters[id] = mount;
     },
+    ensureThree,
     createStage,
     EASE,
     WOODS,
