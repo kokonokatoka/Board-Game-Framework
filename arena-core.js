@@ -653,6 +653,27 @@
         winCondition: 'スタートから本物の「🪙金塊ゴール」まで貫通した道が繋がれば【⛏️金鉱掘りチーム】の勝利！山札と全員の手札が尽きても到達できなければ【😈お邪魔者チーム】の勝利！全3ラウンドで獲得した金塊の合計が最も多いプレイヤーの総合優勝！',
         proTip: 'お邪魔者は序盤から露骨に道を塞ぐとすぐ正体がバレて道具を全破壊されてしまいます。最初は真面目な金鉱掘りのフリをして道を伸ばし、ゴール直前の決定的な瞬間に行き止まりカードや落石で道を封鎖しましょう！'
       }
+    },
+    ito: {
+      category: '💬 価値観共有パーティ (2D完全版)',
+      playerTypes: ['solo', 'duo', 'multi'],
+      genre: 'bluff',
+      playTime: '10-20分',
+      timeMinutes: 12,
+      rating: 5.0,
+      releaseOrder: 23,
+      featured: true,
+      bannerBg: 'radial-gradient(circle at 80% 50%, rgba(244, 63, 94, 0.32), transparent 70%)',
+      detailedRules: {
+        overview: '1〜100のナンバーカードが配られ、数字を直接言わずに「お題に沿った言葉（たとえ）」だけで表現し、全員のカードを数字が小さい順に出していく大人気価値観コミュニケーションゲーム！',
+        rules: [
+          '【🕸️クモノイト（協力モード）】：全員に1〜100の数字カードが配られます。自分の数字を直接言うのは絶対NG！お題（例：生き物の強さ、食べ物の贅沢さなど）に沿って、自分の数字の大きさを言葉だけで宣言します。',
+          '全員の宣言を聞き比べ、まだ出ていないカードの中で「今これが一番小さい数字だ！」と思うカードから順番に場へ出していきます。もし出したカードより小さい数字が誰かの手札に残っていたら、その枚数分だけチームの❤️ライフ（初期3）が減ってしまいます！',
+          '【❤️アカイイト（ペアモード）】：自分の数字と足して「100に最も近く、かつ100を超えない（101以上はドボン！）」パートナーの宣言を指名する第2モードも収録！'
+        ],
+        winCondition: 'クモノイトではライフを1以上残して全3ステージのすべてのカードを小さい順に出し切ればチーム全員の完全勝利！',
+        proTip: '人によって「何が高級か」「何がピンチか」の価値観は驚くほどズレます！相手の性格やニュアンス補足まで読み取って順番を見極めましょう！'
+      }
     }
   };
 
@@ -680,7 +701,7 @@
 
   // スポットライト カルーセル状態
   const spotlightState = {
-    featuredIds: ['saboteur', 'deep_sea', 'geister', 'dominion', 'catan', 'splendor', 'skull', 'gobblet', 'yacht', 'codenames', 'quarto', 'blokus', 'poker'],
+    featuredIds: ['ito', 'saboteur', 'deep_sea', 'geister', 'dominion', 'catan', 'splendor', 'skull', 'gobblet', 'yacht', 'codenames', 'quarto', 'blokus', 'poker'],
     currentIndex: 0,
     timer: null,
     isHovered: false
