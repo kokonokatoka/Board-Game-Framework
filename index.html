@@ -3,7 +3,11 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-  <title>🎲 BOARD ARENA - オンライン対戦ボードゲームポータル</title>
+  <title>BOARD ARENA - オンライン対戦ボードゲームプラットフォーム</title>
+  <!-- Google Fonts: Plus Jakarta Sans & Noto Sans JP -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;600;700;800&family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="style.css">
   <!-- PeerJS 公式CDN (WebRTC P2P) -->
   <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
@@ -13,41 +17,44 @@
 <body>
   <div id="app" class="app-container">
     
-    <!-- プラットフォーム共通ヘッダー -->
+    <!-- プラットフォーム共通ヘッダー (AAA Minimal White) -->
     <header class="app-header">
       <div class="header-left">
-        <h1 class="platform-logo" id="logo-btn">🎲 BOARD ARENA</h1>
+        <h1 class="platform-logo" id="logo-btn">
+          <span class="logo-badge">BA</span>
+          <span class="logo-text">BOARD ARENA</span>
+        </h1>
       </div>
       <div class="header-right">
         <!-- サウンドトグル -->
-        <button id="sfx-toggle-btn" class="icon-tool-btn" title="効果音のON/OFF">🔊</button>
+        <button id="sfx-toggle-btn" class="icon-tool-btn" title="サウンドのON/OFF">🔊</button>
         <!-- プロフィール＆実績 -->
-        <button id="profile-btn" class="profile-badge-btn" title="実績・戦績プロフィールを開く">
+        <button id="profile-btn" class="profile-badge-btn" title="戦績・プロフィール">
           <span id="header-avatar" class="user-avatar-icon">👑</span>
           <span id="header-username" class="header-name-text">プレイヤー</span>
           <span id="header-trophy-count" class="trophy-pill">🏆 0</span>
         </button>
-        <div id="network-status" class="status-pill">接続中...</div>
+        <div id="network-status" class="status-pill"><span class="status-dot"></span>オンライン</div>
       </div>
     </header>
 
     <!-- 1. ゲーム選択ポータル (カタログ画面) -->
     <section id="catalog-view" class="view-panel active">
       
-      <!-- AAA Featured Hero Spotlight (大迫力ピックアップ) -->
+      <!-- AAA Featured Hero Spotlight (シネマティック・ホワイトショーケース) -->
       <div class="hero-spotlight-card" id="hero-spotlight">
         <div class="hero-spotlight-bg" id="hero-spotlight-bg"></div>
         <div class="hero-spotlight-content">
           <div class="hero-tags-row">
-            <span class="spotlight-tag" id="spotlight-tag">🔥 FEATURED TITLE</span>
-            <span class="spotlight-rating" id="spotlight-rating">★★★★★ 4.9</span>
-            <span class="spotlight-players" id="spotlight-players">👥 2〜8人</span>
+            <span class="spotlight-tag" id="spotlight-tag">FEATURED</span>
+            <span class="spotlight-rating" id="spotlight-rating">★ 4.9</span>
+            <span class="spotlight-players" id="spotlight-players">2〜8人</span>
           </div>
           <h2 class="spotlight-title" id="spotlight-title">3Dスカル (Skull)</h2>
-          <p class="spotlight-desc" id="spotlight-desc">カジノテーブルで囲む至高の心理戦！手札を掴んでドラッグ＆ドロップで場に出し、ダブルクリックでめくる本格卓上3Dスカル！</p>
+          <p class="spotlight-desc" id="spotlight-desc">カジノテーブルで囲む至高の心理戦。手札を掴んで場に出し、めくって駆け引きを行う本格卓上3Dスカル。</p>
           <div class="spotlight-actions">
-            <button id="spotlight-play-btn" class="btn btn-primary btn-lg spotlight-play-btn">⚡ 今すぐ即プレイ</button>
-            <button id="spotlight-rule-btn" class="btn btn-secondary btn-lg">📖 ルール解説</button>
+            <button id="spotlight-play-btn" class="btn btn-primary btn-lg spotlight-play-btn">今すぐプレイ</button>
+            <button id="spotlight-rule-btn" class="btn btn-secondary btn-lg">ルール解説</button>
           </div>
         </div>
         <div class="hero-spotlight-visual">
@@ -62,36 +69,36 @@
         <!-- 上段: プレイスタイル区分 (Solo / Duo / Multi) -->
         <div class="player-filter-tabs" id="player-filter-tabs">
           <button class="filter-tab active" data-player="all">すべて <span class="tab-count" id="count-all">16</span></button>
-          <button class="filter-tab" data-player="solo">👤 ソロ (一人練習) <span class="tab-count" id="count-solo">16</span></button>
-          <button class="filter-tab" data-player="duo">👥 デュオ (1 vs 1) <span class="tab-count" id="count-duo">16</span></button>
-          <button class="filter-tab" data-player="multi">🌐 マルチ (3〜8人) <span class="tab-count" id="count-multi">3</span></button>
+          <button class="filter-tab" data-player="solo">ソロ対戦 <span class="tab-count" id="count-solo">16</span></button>
+          <button class="filter-tab" data-player="duo">1 vs 1 <span class="tab-count" id="count-duo">16</span></button>
+          <button class="filter-tab" data-player="multi">マルチプレイ <span class="tab-count" id="count-multi">3</span></button>
         </div>
 
         <!-- 中段: ジャンルタグチップス -->
         <div class="genre-chips-scroll" id="genre-chips-scroll">
           <button class="genre-chip active" data-genre="all">全ジャンル</button>
-          <button class="genre-chip" data-genre="brain">🧠 頭脳・アブストラクト</button>
-          <button class="genre-chip" data-genre="dice">🎲 運・ダイス・カード</button>
-          <button class="genre-chip" data-genre="bluff">🕵️ 心理戦・ブラフ</button>
-          <button class="genre-chip" data-genre="action">⚡ 3D・アクション</button>
-          <button class="genre-chip" data-genre="puzzle">🚢 パズル・海戦</button>
+          <button class="genre-chip" data-genre="brain">ストラテジー</button>
+          <button class="genre-chip" data-genre="dice">ダイス・カード</button>
+          <button class="genre-chip" data-genre="bluff">心理戦・ブラフ</button>
+          <button class="genre-chip" data-genre="action">3Dアクション</button>
+          <button class="genre-chip" data-genre="puzzle">パズル・海戦</button>
         </div>
 
         <!-- 下段: リアルタイム検索 & ソート選択 -->
         <div class="search-sort-row">
           <div class="search-input-wrapper">
             <span class="search-icon">🔍</span>
-            <input type="text" id="game-search-input" placeholder="ゲーム名やキーワードで検索... (例: オセロ、ダイス、3D)" maxlength="20">
+            <input type="text" id="game-search-input" placeholder="ゲーム名やキーワードで検索..." maxlength="20">
             <button id="search-clear-btn" class="search-clear-btn hidden">✕</button>
           </div>
           <div class="sort-selector-wrapper">
             <span class="sort-label">並び替え:</span>
             <select id="sort-selector" class="sort-dropdown">
-              <option value="featured">🔥 おすすめ・人気順</option>
-              <option value="newest">🆕 新着タイトル順</option>
-              <option value="rating">⭐ 評価の高い順</option>
-              <option value="time">⏱️ プレイ時間短い順</option>
-              <option value="title">🔤 名前順 (50音)</option>
+              <option value="featured">おすすめ順</option>
+              <option value="newest">新着順</option>
+              <option value="rating">高評価順</option>
+              <option value="time">プレイ時間順</option>
+              <option value="title">名前順</option>
             </select>
           </div>
         </div>
@@ -114,7 +121,7 @@
       <!-- 統合スリム・トップバー (タイトル・対戦情報・リアクション・招待を1行に集約) -->
       <div class="game-compact-bar">
         <div class="gcb-left">
-          <button id="back-to-catalog-btn" class="gcb-back-btn">◀ 一覧へ</button>
+          <button id="back-to-catalog-btn" class="gcb-back-btn">← ゲーム一覧</button>
           <div class="active-game-title" id="active-game-title">ゲーム名</div>
         </div>
 
@@ -130,13 +137,13 @@
 
         <div class="gcb-right">
           <div class="emote-inline-group">
-            <button class="emote-btn" data-msg="よろしくお願いします！" title="よろしく">👋</button>
-            <button class="emote-btn" data-msg="考え中…🤔" title="長考中">🤔</button>
-            <button class="emote-btn" data-msg="ナイス！👏" title="ナイス">👏</button>
-            <button class="emote-btn" data-msg="参りました！🏳️" title="降参">🏳️</button>
+            <button class="emote-btn" data-msg="よろしくお願いします！" title="よろしく">よろしく</button>
+            <button class="emote-btn" data-msg="考え中…🤔" title="長考中">思考中</button>
+            <button class="emote-btn" data-msg="ナイス！👏" title="ナイス">ナイス</button>
+            <button class="emote-btn" data-msg="参りました！🏳️" title="降参">降参</button>
           </div>
-          <button id="share-room-btn" class="btn btn-sm btn-primary" title="招待URLをコピー">📋 招待</button>
-          <button id="custom-room-btn" class="btn btn-sm btn-secondary" title="合言葉で専用の別室を作成・参加">🔒 部屋</button>
+          <button id="share-room-btn" class="btn btn-sm btn-primary" title="招待URLをコピー">招待リンク</button>
+          <button id="custom-room-btn" class="btn btn-sm btn-secondary" title="合言葉で専用の別室を作成・参加">プライベート部屋</button>
         </div>
       </div>
 
@@ -164,7 +171,7 @@
           <!-- ルール詳細が動的に挿入されます -->
         </div>
         <div class="modal-footer rule-footer">
-          <button id="rule-play-now-btn" class="btn btn-primary btn-block">⚡ このゲームを即プレイ！</button>
+          <button id="rule-play-now-btn" class="btn btn-primary btn-block">今すぐプレイ</button>
         </div>
       </div>
     </div>
@@ -173,7 +180,7 @@
     <div id="profile-modal" class="modal-backdrop hidden">
       <div class="modal-card profile-modal-card">
         <div class="modal-header-row">
-          <h2 class="modal-title">🏆 プレイヤープロフィール＆実績</h2>
+          <h2 class="modal-title">プレイヤープロフィール & 実績</h2>
           <button id="close-profile-modal-btn" class="btn-close-icon">✕</button>
         </div>
         
@@ -194,7 +201,7 @@
             </div>
           </div>
           <div class="name-edit-group">
-            <label class="input-lbl">プレイヤー名:</label>
+            <label class="input-lbl">プレイヤー名</label>
             <input type="text" id="modal-username-input" class="modal-input" maxlength="12">
           </div>
         </div>
@@ -208,7 +215,7 @@
 
         <!-- 実績 (Achievements) 一覧 -->
         <div class="achievements-section">
-          <h3 class="ach-title">🎖️ アンロック実績</h3>
+          <h3 class="ach-title">アンロック実績</h3>
           <div class="achievements-list" id="achievements-list">
             <!-- 実績バッジが自動生成されます -->
           </div>
@@ -219,18 +226,18 @@
     <!-- 共通ロビーモーダル (部屋作成 / 参加) -->
     <div id="lobby-modal" class="modal-backdrop hidden">
       <div class="modal-card">
-        <h2 class="modal-title" id="lobby-game-title">オセロで対戦</h2>
-        <p class="modal-desc">部屋を作って友達にURLを送るか、合言葉で合流します。</p>
+        <h2 class="modal-title" id="lobby-game-title">対戦ルーム</h2>
+        <p class="modal-desc">部屋を作成してURLを共有するか、合言葉コードを入力して参加します。</p>
 
         <!-- 部屋を作る -->
         <div class="lobby-action-section">
-          <button id="create-room-btn" class="btn btn-primary btn-block btn-lg">🏠 部屋を作る (Host)</button>
+          <button id="create-room-btn" class="btn btn-primary btn-block btn-lg">部屋を作成する (Host)</button>
           
           <div id="room-created-info" class="room-info-card hidden">
             <div class="room-code-tag">合言葉: <span id="display-room-code">----</span></div>
-            <p class="guide-text">下のボタンを押して友達にURLを送るだけで自動対戦が始まります！</p>
-            <button id="copy-invite-url-btn" class="btn btn-success btn-block">📋 招待URLをコピー</button>
-            <div id="copy-toast" class="toast-msg hidden">URLをコピーしました！友達に送信してください</div>
+            <p class="guide-text">URLを相手に送るだけで、クリックして即座に対戦が開始されます。</p>
+            <button id="copy-invite-url-btn" class="btn btn-success btn-block">招待URLをコピー</button>
+            <div id="copy-toast" class="toast-msg hidden">URLをクリップボードにコピーしました</div>
           </div>
         </div>
 
@@ -240,7 +247,7 @@
         <div class="lobby-action-section">
           <div class="join-input-group">
             <input type="text" id="join-code-input" placeholder="4桁コード (例: A8X2)" maxlength="6">
-            <button id="join-room-btn" class="btn btn-secondary">🚪 参加する</button>
+            <button id="join-room-btn" class="btn btn-secondary">参加する</button>
           </div>
         </div>
 

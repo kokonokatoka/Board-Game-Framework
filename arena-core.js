@@ -895,27 +895,26 @@
     else if (game.playerTypes.includes('solo')) playerLabel = 'ソロ / 1vs1';
 
     card.innerHTML = `
-      <div>
-        <div class="card-top">
-          <div class="card-icon">${game.icon || '🎲'}</div>
-          <div>
-            <div class="card-title">${game.name}</div>
-            <div style="display:flex;gap:6px;align-items:center;margin-top:2px;">
-              <span class="card-badge">${game.category || 'ボードゲーム'}</span>
-              <span style="font-size:11px;color:#fbbf24;font-weight:700;">★ ${game.rating || 4.8}</span>
-            </div>
-          </div>
+      <div class="card-visual-header">
+        <div class="card-icon-frame">${game.icon || '🎲'}</div>
+        <div class="card-tags-group">
+          <span class="card-badge">${game.category || 'ボードゲーム'}</span>
+          <span class="card-rating">★ ${game.rating || 4.8}</span>
         </div>
+      </div>
+      <div class="card-body">
+        <h3 class="card-title">${game.name}</h3>
         <p class="card-desc">${game.description || ''}</p>
       </div>
-      <div>
+      <div class="card-footer">
         <div class="card-meta">
-          <span>👥 ${playerLabel}</span>
-          <span>⏱️ ${game.playTime || '5-15分'}</span>
+          <span class="meta-item">${playerLabel}</span>
+          <span class="meta-divider">•</span>
+          <span class="meta-item">${game.playTime || '5-15分'}</span>
         </div>
-        <div style="display:flex;gap:8px;margin-top:10px;">
-          <button class="btn btn-primary card-btn card-play-btn" style="flex:1;">⚡ 即プレイ</button>
-          <button class="btn btn-secondary card-rule-btn" style="padding:0 12px;font-size:12px;" title="ルール解説を見る">📖 ルール</button>
+        <div class="card-actions-group">
+          <button class="btn btn-primary card-btn card-play-btn">プレイ</button>
+          <button class="btn btn-outline card-rule-btn" title="ルール解説を見る">ルール</button>
         </div>
       </div>
     `;
@@ -1004,12 +1003,12 @@
     if (el.spotlightTitle) el.spotlightTitle.textContent = game.name;
     if (el.spotlightDesc) el.spotlightDesc.textContent = game.description;
     if (el.spotlightIcon) el.spotlightIcon.textContent = game.icon || '🎲';
-    if (el.spotlightRating) el.spotlightRating.textContent = `★★★★★ ${game.rating || 4.9}`;
+    if (el.spotlightRating) el.spotlightRating.textContent = `★ ${game.rating || 4.9}`;
 
     let playerLabel = '1 vs 1';
     if (game.playerTypes.includes('multi')) playerLabel = '2〜8人';
     else if (game.playerTypes.includes('solo')) playerLabel = 'ソロ / 1vs1';
-    if (el.spotlightPlayers) el.spotlightPlayers.textContent = `👥 ${playerLabel}`;
+    if (el.spotlightPlayers) el.spotlightPlayers.textContent = playerLabel;
 
     const meta = GAME_METADATA[gameId];
     if (meta && meta.bannerBg && el.heroSpotlightBg) {
@@ -1053,7 +1052,7 @@
 
     if (el.ruleModalIcon) el.ruleModalIcon.textContent = game.icon || '🎲';
     if (el.ruleModalTitle) el.ruleModalTitle.textContent = game.name;
-    if (el.ruleModalCategory) el.ruleModalCategory.textContent = `${game.category} • ⏱️ ${game.playTime}`;
+    if (el.ruleModalCategory) el.ruleModalCategory.textContent = `${game.category} • ${game.playTime}`;
 
     const rulesData = game.detailedRules || {};
     const rulesListHtml = (rulesData.rules || [])
@@ -1062,29 +1061,29 @@
 
     if (el.ruleModalBody) {
       el.ruleModalBody.innerHTML = `
-        <div style="margin-bottom:16px;">
-          <h4 style="color:#94a3b8;font-size:13px;text-transform:uppercase;margin-bottom:6px;">📖 ゲーム概要</h4>
-          <p style="font-size:14px;color:#cbd5e1;line-height:1.6;">${rulesData.overview || game.description || ''}</p>
+        <div class="rule-block">
+          <h4 class="rule-block-title">ゲーム概要</h4>
+          <p class="rule-block-text">${rulesData.overview || game.description || ''}</p>
         </div>
 
-        <div style="margin-bottom:16px;">
-          <h4 style="color:#94a3b8;font-size:13px;text-transform:uppercase;margin-bottom:6px;">📋 基本ルール・遊び方</h4>
-          <ul class="rule-list-items" style="padding-left:20px;font-size:14px;color:#e2e8f0;line-height:1.7;">
+        <div class="rule-block">
+          <h4 class="rule-block-title">基本ルール & 遊び方</h4>
+          <ul class="rule-list-items">
             ${rulesListHtml}
           </ul>
         </div>
 
         ${rulesData.winCondition ? `
-          <div style="background:#f59e0b15;border:1px solid #f59e0b40;border-radius:10px;padding:12px;margin-bottom:16px;">
-            <div style="font-weight:700;color:#fbbf24;font-size:13px;margin-bottom:4px;">🏆 勝利条件</div>
-            <div style="font-size:13px;color:#fef3c7;">${rulesData.winCondition}</div>
+          <div class="rule-highlight-box win">
+            <div class="highlight-title">勝利条件</div>
+            <div class="highlight-text">${rulesData.winCondition}</div>
           </div>
         ` : ''}
 
         ${rulesData.proTip ? `
-          <div style="background:#38bdf815;border:1px solid #38bdf840;border-radius:10px;padding:12px;">
-            <div style="font-weight:700;color:#38bdf8;font-size:13px;margin-bottom:4px;">💡 勝利へのアドバイス</div>
-            <div style="font-size:13px;color:#e0f2fe;">${rulesData.proTip}</div>
+          <div class="rule-highlight-box tip">
+            <div class="highlight-title">勝利へのアドバイス</div>
+            <div class="highlight-text">${rulesData.proTip}</div>
           </div>
         ` : ''}
       `;
