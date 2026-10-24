@@ -31,11 +31,15 @@
     poker_chip: 'assets/models/poker_chip.glb',
     blokus_block: 'assets/models/blokus_block.glb',
     dab_pillar: 'assets/models/dab_pillar.glb',
-    splendor_token: 'assets/models/splendor_token.glb'
+    splendor_token: 'assets/models/splendor_token.glb',
+    catan_settlement: 'assets/models/catan_settlement.glb',
+    catan_city: 'assets/models/catan_city.glb',
+    catan_road: 'assets/models/catan_road.glb',
+    catan_robber: 'assets/models/catan_robber.glb'
   };
 
-  // 既に独自3D実装を持つ4ゲームはラッパー対象外
-  const NATIVE_3D_GAMES = new Set(['skull', 'gobblet', 'block_battle_3d', 'splendor']);
+  // 既に独自3D実装を持つ5ゲームはラッパー対象外
+  const NATIVE_3D_GAMES = new Set(['skull', 'gobblet', 'block_battle_3d', 'splendor', 'catan']);
 
   const glbCache = new Map();
   let threeLoadPromise = null;
