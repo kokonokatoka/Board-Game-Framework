@@ -4,8 +4,8 @@
  * 
  * 🌟 AAA Features:
  * - プレイスタイル分類 (Solo / Duo / Multi)
- * - ジャンルチップス & リアルタイム検索 & ソート
- * - ヒーロースポットライト・カルーセル
+ * - ジャンルタブ & リアルタイム検索
+ * - 注目タイトル表示 & 表紙アート
  * - 詳細ルール解説モーダル
  * - プレイヤープロフィール & 戦績カウンター & 10大実績システム
  * - Web Audio API による上品なUI効果音
@@ -41,13 +41,17 @@
     toggle() {
       this.enabled = !this.enabled;
       localStorage.setItem('ba_sfx_enabled', this.enabled ? 'true' : 'false');
-      const sfxBtn = document.getElementById('sfx-toggle-btn');
-      if (sfxBtn) {
-        sfxBtn.textContent = this.enabled ? '🔊' : '🔇';
-        sfxBtn.title = this.enabled ? '効果音: ON' : '効果音: OFF';
-      }
+      this.syncButton();
       if (this.enabled) this.playTone(800, 0.05, 'sine', 0.1);
       return this.enabled;
+    },
+
+    syncButton() {
+      const sfxBtn = document.getElementById('sfx-toggle-btn');
+      if (sfxBtn) {
+        sfxBtn.classList.toggle('muted', !this.enabled);
+        sfxBtn.title = this.enabled ? '効果音: オン' : '効果音: オフ';
+      }
     },
 
     playTone(freq, duration, type = 'sine', gain = 0.08) {
@@ -137,10 +141,8 @@
     updateHeaderDisplay() {
       const headerAvatar = document.getElementById('header-avatar');
       const headerName = document.getElementById('header-username');
-      const headerTrophy = document.getElementById('header-trophy-count');
-      if (headerAvatar) headerAvatar.textContent = this.data.avatar;
+      if (headerAvatar) headerAvatar.textContent = Array.from(this.data.username)[0] || 'P';
       if (headerName) headerName.textContent = this.data.username;
-      if (headerTrophy) headerTrophy.textContent = `🏆 ${this.data.achievements.length}`;
     },
 
     setUsername(name) {
@@ -187,7 +189,7 @@
 
       const ach = ACHIEVEMENTS_DEF.find(a => a.id === id);
       if (ach) {
-        showGlobalToast(`🎖️ 実績解除: ${ach.icon} ${ach.title}！`);
+        showGlobalToast(`実績を達成しました: ${ach.title}`);
       }
     }
   };
@@ -677,6 +679,68 @@
     }
   };
 
+  // ==========================================
+  // 3b. 一覧表示用の表紙データ (日本語タイトル・欧文タイトル・表紙色)
+  // ==========================================
+  const GAME_COVERS = {
+    othello:         { title: 'オセロ', latin: 'Othello', tone: '#2f4a3a' },
+    gomoku:          { title: '五目並べ', latin: 'Gomoku', tone: '#4a3426' },
+    gobblet:         { title: 'ゴブレット ゴブラーズ', latin: 'Gobblet', tone: '#3f2a48' },
+    blokus:          { title: 'ブロックス', latin: 'Blokus', tone: '#2c3e5c' },
+    block_battle_3d: { title: 'ブロックバトル', latin: 'Block Battle', tone: '#5a2a22' },
+    poker:           { title: 'ポーカー', latin: 'Poker', tone: '#4a1f2b' },
+    codenames:       { title: 'コードネーム', latin: 'Codenames', tone: '#2a2c30' },
+    connect4:        { title: 'コネクトフォー', latin: 'Connect Four', tone: '#1f2b45' },
+    mancala:         { title: 'マンカラ', latin: 'Mancala', tone: '#5c4424' },
+    quoridor:        { title: 'コリドール', latin: 'Quoridor', tone: '#4a4a26' },
+    dotsandboxes:    { title: 'ドット＆ボックス', latin: 'Dots & Boxes', tone: '#33304a' },
+    skull:           { title: 'スカル', latin: 'Skull', tone: '#4a171c', tagline: '伏せた円盤は花か、髑髏か。読み合いで競り上げるブラフゲーム。' },
+    battleship:      { title: 'バトルシップ', latin: 'Battleship', tone: '#163a52' },
+    checkers:        { title: 'チェッカー', latin: 'Checkers', tone: '#5a2420' },
+    quarto:          { title: 'クアルト', latin: 'Quarto', tone: '#4f4030' },
+    yacht:           { title: 'ヨット', latin: 'Yacht', tone: '#1d4650' },
+    splendor:        { title: '宝石の煌き', latin: 'Splendor', tone: '#232a50', tagline: '宝石を集めて鉱山と商人を手に入れ、貴族を迎える。' },
+    catan:           { title: 'カタンの開拓者たち', latin: 'Catan', tone: '#6a4a1f', tagline: '資源を集め、交渉し、島に街道と都市を広げていく。' },
+    dominion:        { title: 'ドミニオン', latin: 'Dominion', tone: '#4f4320', tagline: '手札から自分だけの山札を組み上げるデッキ構築ゲーム。' },
+    geister:         { title: 'ガイスター', latin: 'Geister', tone: '#302a4a', tagline: '良いおばけと悪いおばけ。正体を伏せたまま盤上を進む。' },
+    deep_sea:        { title: '海底探険', latin: 'Deep Sea Adventure', tone: '#0f3440', tagline: '酸素は全員で共有。深く潜るほど、帰り道は遠くなる。' },
+    saboteur:        { title: 'お邪魔者', latin: 'Saboteur', tone: '#4a3524' },
+    ito:             { title: 'ito', latin: 'ito', tone: '#4a2638' }
+  };
+
+  const GENRE_LABELS = {
+    brain: 'ストラテジー',
+    bluff: '心理戦',
+    dice: 'ダイス',
+    puzzle: '推理・パズル',
+    action: 'アクション'
+  };
+
+  function formatPlayers(game) {
+    if (game.maxPlayers > 2) return `${game.minPlayers || 2}–${game.maxPlayers}人`;
+    return '2人';
+  }
+
+  function formatMeta(game, withGenre = true) {
+    const time = (game.playTime || '').replace('-', '–');
+    const parts = [formatPlayers(game), time];
+    if (withGenre) parts.push(GENRE_LABELS[game.genre]);
+    return parts.filter(Boolean).join(' · ');
+  }
+
+  function coverMarkup(game) {
+    // 一番長い単語が枠に収まるよう、欧文タイトルの文字サイズを決める
+    const longestWord = Math.max(...game.latin.split(' ').map(w => w.length));
+    const latinSize = Math.min(13, 64 / (longestWord * 0.8)).toFixed(2);
+    return `
+      <div class="cover" style="--tone:${game.tone}">
+        <span class="cover-frame"></span>
+        <span class="cover-latin" style="--latin-size:${latinSize}cqw">${game.latin}</span>
+        <span class="cover-mark">Board Arena</span>
+      </div>
+    `;
+  }
+
   // プラットフォーム共通ステート
   const state = {
     games: new Map(),
@@ -691,20 +755,17 @@
     myPlayerIndex: 1
   };
 
-  // フィルター＆ソート状態
+  // フィルター状態 ('all' | 'multi' | ジャンルキー)
   const filterState = {
-    playerType: 'all',
-    genre: 'all',
-    searchQuery: '',
-    sortBy: 'featured'
+    tab: 'all',
+    searchQuery: ''
   };
 
-  // スポットライト カルーセル状態
+  // 注目タイトル状態 (表示切り替えは進捗バーの animationend で進める)
   const spotlightState = {
-    featuredIds: ['ito', 'saboteur', 'deep_sea', 'geister', 'dominion', 'catan', 'splendor', 'skull', 'gobblet', 'yacht', 'codenames', 'quarto', 'blokus', 'poker'],
+    featuredIds: ['catan', 'skull', 'splendor', 'dominion', 'geister', 'deep_sea'],
     currentIndex: 0,
-    timer: null,
-    isHovered: false
+    initialized: false
   };
 
   // UI要素キャッシュ
@@ -726,24 +787,21 @@
     p2NameDisplay: document.getElementById('p2-name-display'),
     matchStatusBadge: document.getElementById('match-status-badge'),
     
-    // スポットライト
+    // 注目タイトル
     heroSpotlight: document.getElementById('hero-spotlight'),
-    heroSpotlightBg: document.getElementById('hero-spotlight-bg'),
+    spotlightCopy: document.getElementById('spotlight-copy'),
     spotlightTitle: document.getElementById('spotlight-title'),
     spotlightDesc: document.getElementById('spotlight-desc'),
-    spotlightIcon: document.getElementById('spotlight-icon'),
-    spotlightRating: document.getElementById('spotlight-rating'),
-    spotlightPlayers: document.getElementById('spotlight-players'),
-    spotlightDots: document.getElementById('spotlight-dots'),
+    spotlightMeta: document.getElementById('spotlight-meta'),
+    spotlightArt: document.getElementById('spotlight-art'),
+    spotlightNav: document.getElementById('spotlight-nav'),
     spotlightPlayBtn: document.getElementById('spotlight-play-btn'),
     spotlightRuleBtn: document.getElementById('spotlight-rule-btn'),
 
-    // フィルター & ソート
-    playerFilterTabs: document.getElementById('player-filter-tabs'),
-    genreChipsScroll: document.getElementById('genre-chips-scroll'),
+    // フィルター & 検索
+    libraryTabs: document.getElementById('library-tabs'),
+    gameCount: document.getElementById('game-count'),
     gameSearchInput: document.getElementById('game-search-input'),
-    searchClearBtn: document.getElementById('search-clear-btn'),
-    sortSelector: document.getElementById('sort-selector'),
     noResultsMsg: document.getElementById('no-results-msg'),
     resetFilterBtn: document.getElementById('reset-filter-btn'),
 
@@ -801,6 +859,13 @@
       }, config);
 
       if (meta.category) fullGame.category = meta.category;
+
+      const cover = GAME_COVERS[config.id] || {};
+      fullGame.title = cover.title || config.name;
+      fullGame.latin = cover.latin || config.name;
+      fullGame.tone = cover.tone || '#2a2c30';
+      fullGame.tagline = cover.tagline || '';
+
       state.games.set(config.id, fullGame);
 
       scheduleCatalogRender();
@@ -813,13 +878,12 @@
     if (renderDebounce) clearTimeout(renderDebounce);
     renderDebounce = setTimeout(() => {
       renderCatalog();
-      updateFilterCounts();
-      initSpotlightCarousel();
+      initSpotlight();
     }, 40);
   }
 
   // ==========================================
-  // 5. カタログ描画 & フィルター & ソート
+  // 5. カタログ描画 & フィルター
   // ==========================================
   function renderCatalog() {
     if (!el.gamesGrid) return;
@@ -828,171 +892,115 @@
     const gamesList = Array.from(state.games.values());
     const query = filterState.searchQuery.trim().toLowerCase();
 
-    // フィルタリング
     const filtered = gamesList.filter(game => {
-      // プレイスタイル
-      if (filterState.playerType !== 'all') {
-        if (!game.playerTypes || !game.playerTypes.includes(filterState.playerType)) {
-          return false;
-        }
+      if (filterState.tab === 'multi') {
+        // 表示上の人数 (formatPlayers) と同じく、3人以上で遊べるものを大人数とする
+        if (!(game.maxPlayers > 2)) return false;
+      } else if (filterState.tab !== 'all') {
+        if (game.genre !== filterState.tab) return false;
       }
-      // ジャンル
-      if (filterState.genre !== 'all') {
-        if (game.genre !== filterState.genre) {
-          return false;
-        }
-      }
-      // 検索クエリ
       if (query) {
-        const titleMatch = (game.name || '').toLowerCase().includes(query);
-        const descMatch = (game.description || '').toLowerCase().includes(query);
-        const catMatch = (game.category || '').toLowerCase().includes(query);
-        if (!titleMatch && !descMatch && !catMatch) return false;
+        const haystack = [game.title, game.latin, game.name, game.description, GENRE_LABELS[game.genre]]
+          .join(' ')
+          .toLowerCase();
+        if (!haystack.includes(query)) return false;
       }
       return true;
     });
 
-    // ソート
+    // 並び順: 注目タイトルを先頭に、残りはレーティング順
     filtered.sort((a, b) => {
-      switch (filterState.sortBy) {
-        case 'newest':
-          return (b.releaseOrder || 0) - (a.releaseOrder || 0);
-        case 'rating':
-          return (b.rating || 0) - (a.rating || 0);
-        case 'time':
-          return (a.timeMinutes || 0) - (b.timeMinutes || 0);
-        case 'title':
-          return (a.name || '').localeCompare(b.name || '', 'ja');
-        case 'featured':
-        default:
-          // おすすめ順: スポットライト対象を優先、次いでレーティング降順
-          const aFeatured = spotlightState.featuredIds.includes(a.id) ? 1 : 0;
-          const bFeatured = spotlightState.featuredIds.includes(b.id) ? 1 : 0;
-          if (bFeatured !== aFeatured) return bFeatured - aFeatured;
-          return (b.rating || 0) - (a.rating || 0);
+      const aFeatured = spotlightState.featuredIds.includes(a.id) ? 1 : 0;
+      const bFeatured = spotlightState.featuredIds.includes(b.id) ? 1 : 0;
+      if (bFeatured !== aFeatured) return bFeatured - aFeatured;
+      return (b.rating || 0) - (a.rating || 0);
+    });
+
+    if (el.gameCount) el.gameCount.textContent = filtered.length;
+    if (el.noResultsMsg) el.noResultsMsg.classList.toggle('hidden', filtered.length > 0);
+    filtered.forEach(game => {
+      el.gamesGrid.appendChild(createGameTile(game));
+    });
+  }
+
+  function createGameTile(game) {
+    const tile = document.createElement('article');
+    tile.className = 'tile';
+    tile.tabIndex = 0;
+    tile.setAttribute('aria-label', game.title);
+
+    tile.innerHTML = `
+      <div class="tile-art">
+        ${coverMarkup(game)}
+        <button class="tile-play" tabindex="-1">プレイ</button>
+      </div>
+      <h3 class="tile-title">${game.title}</h3>
+      <p class="tile-meta">${formatMeta(game, false)}</p>
+    `;
+
+    tile.addEventListener('mouseenter', () => SoundFx.playHover());
+
+    // ホバー時のプレイボタンは即プレイ
+    tile.querySelector('.tile-play').addEventListener('click', (e) => {
+      e.stopPropagation();
+      SoundFx.playClick();
+      autoJoinGame(game.id, 'lobby');
+    });
+
+    // タイル本体は詳細 (遊び方) を開く
+    const openDetail = () => {
+      SoundFx.playClick();
+      openRuleModal(game.id);
+    };
+    tile.addEventListener('click', openDetail);
+    tile.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        openDetail();
       }
     });
 
-    // 結果表示判定
-    if (filtered.length === 0) {
-      if (el.noResultsMsg) el.noResultsMsg.classList.remove('hidden');
-    } else {
-      if (el.noResultsMsg) el.noResultsMsg.classList.add('hidden');
-      filtered.forEach(game => {
-        el.gamesGrid.appendChild(createGameCardElement(game));
-      });
-    }
-  }
-
-  function createGameCardElement(game) {
-    const card = document.createElement('div');
-    card.className = 'game-card';
-
-    // プレイスタイル表記
-    let playerLabel = '1 vs 1';
-    if (game.playerTypes.includes('multi')) playerLabel = '2〜8人';
-    else if (game.playerTypes.includes('solo') && game.playerTypes.length === 1) playerLabel = 'ソロ専用';
-    else if (game.playerTypes.includes('solo')) playerLabel = 'ソロ / 1vs1';
-
-    card.innerHTML = `
-      <div class="card-visual-header">
-        <div class="card-icon-frame">${game.icon || '🎲'}</div>
-        <div class="card-tags-group">
-          <span class="card-badge">${game.category || 'ボードゲーム'}</span>
-          <span class="card-rating">★ ${game.rating || 4.8}</span>
-        </div>
-      </div>
-      <div class="card-body">
-        <h3 class="card-title">${game.name}</h3>
-        <p class="card-desc">${game.description || ''}</p>
-      </div>
-      <div class="card-footer">
-        <div class="card-meta">
-          <span class="meta-item">${playerLabel}</span>
-          <span class="meta-divider">•</span>
-          <span class="meta-item">${game.playTime || '5-15分'}</span>
-        </div>
-        <div class="card-actions-group">
-          <button class="btn btn-primary card-btn card-play-btn">プレイ</button>
-          <button class="btn btn-outline card-rule-btn" title="ルール解説を見る">ルール</button>
-        </div>
-      </div>
-    `;
-
-    card.addEventListener('mouseenter', () => SoundFx.playHover());
-
-    // 即プレイボタン
-    const playBtn = card.querySelector('.card-play-btn');
-    playBtn.addEventListener('click', (e) => {
-      e.stopPropagation();
-      SoundFx.playClick();
-      autoJoinGame(game.id, 'lobby');
-    });
-
-    // ルールボタン
-    const ruleBtn = card.querySelector('.card-rule-btn');
-    ruleBtn.addEventListener('click', (e) => {
-      e.stopPropagation();
-      SoundFx.playClick();
-      openRuleModal(game.id);
-    });
-
-    // カード全体クリックでも即プレイ
-    card.addEventListener('click', () => {
-      SoundFx.playClick();
-      autoJoinGame(game.id, 'lobby');
-    });
-
-    return card;
-  }
-
-  function updateFilterCounts() {
-    const gamesList = Array.from(state.games.values());
-    const countAll = document.getElementById('count-all');
-    const countSolo = document.getElementById('count-solo');
-    const countDuo = document.getElementById('count-duo');
-    const countMulti = document.getElementById('count-multi');
-
-    if (countAll) countAll.textContent = gamesList.length;
-    if (countSolo) countSolo.textContent = gamesList.filter(g => g.playerTypes && g.playerTypes.includes('solo')).length;
-    if (countDuo) countDuo.textContent = gamesList.filter(g => g.playerTypes && g.playerTypes.includes('duo')).length;
-    if (countMulti) countMulti.textContent = gamesList.filter(g => g.playerTypes && g.playerTypes.includes('multi')).length;
+    return tile;
   }
 
   // ==========================================
-  // 6. ヒーロースポットライト・カルーセル
+  // 6. 注目タイトル
   // ==========================================
-  function initSpotlightCarousel() {
-    if (!el.spotlightDots || spotlightState.featuredIds.length === 0) return;
-    el.spotlightDots.innerHTML = '';
+  function initSpotlight() {
+    spotlightState.featuredIds = spotlightState.featuredIds.filter(id => state.games.has(id));
+    if (!el.spotlightNav || spotlightState.featuredIds.length === 0) return;
 
+    el.spotlightNav.innerHTML = '';
     spotlightState.featuredIds.forEach((id, idx) => {
-      const dot = document.createElement('button');
-      dot.className = `spotlight-dot ${idx === spotlightState.currentIndex ? 'active' : ''}`;
-      dot.title = `スライド ${idx + 1}`;
-      dot.addEventListener('click', () => {
+      const game = state.games.get(id);
+      const item = document.createElement('li');
+      item.innerHTML = `
+        <button class="hero-nav-item">
+          <span class="hero-nav-index">${String(idx + 1).padStart(2, '0')}</span>
+          <span class="hero-nav-title">${game.title}</span>
+          <span class="hero-nav-bar"></span>
+        </button>
+      `;
+      item.querySelector('button').addEventListener('click', () => {
+        if (idx === spotlightState.currentIndex) return;
         SoundFx.playClick();
         spotlightState.currentIndex = idx;
         updateSpotlightDisplay();
       });
-      el.spotlightDots.appendChild(dot);
+      el.spotlightNav.appendChild(item);
     });
 
+    if (!spotlightState.initialized) {
+      spotlightState.initialized = true;
+      // 進捗バーが端まで進んだら次のタイトルへ (ホバー中・非表示中はアニメーションごと止まる)
+      el.spotlightNav.addEventListener('animationend', (e) => {
+        if (!e.target.classList.contains('hero-nav-bar')) return;
+        spotlightState.currentIndex = (spotlightState.currentIndex + 1) % spotlightState.featuredIds.length;
+        updateSpotlightDisplay();
+      });
+    }
+
     updateSpotlightDisplay();
-
-    if (!spotlightState.timer) {
-      spotlightState.timer = setInterval(() => {
-        if (!spotlightState.isHovered && el.catalogView.classList.contains('active')) {
-          spotlightState.currentIndex = (spotlightState.currentIndex + 1) % spotlightState.featuredIds.length;
-          updateSpotlightDisplay();
-        }
-      }, 7000);
-    }
-
-    if (el.heroSpotlight) {
-      el.heroSpotlight.addEventListener('mouseenter', () => { spotlightState.isHovered = true; });
-      el.heroSpotlight.addEventListener('mouseleave', () => { spotlightState.isHovered = false; });
-    }
   }
 
   function updateSpotlightDisplay() {
@@ -1000,30 +1008,33 @@
     const game = state.games.get(gameId);
     if (!game) return;
 
-    if (el.spotlightTitle) el.spotlightTitle.textContent = game.name;
-    if (el.spotlightDesc) el.spotlightDesc.textContent = game.description;
-    if (el.spotlightIcon) el.spotlightIcon.textContent = game.icon || '🎲';
-    if (el.spotlightRating) el.spotlightRating.textContent = `★ ${game.rating || 4.9}`;
-
-    let playerLabel = '1 vs 1';
-    if (game.playerTypes.includes('multi')) playerLabel = '2〜8人';
-    else if (game.playerTypes.includes('solo')) playerLabel = 'ソロ / 1vs1';
-    if (el.spotlightPlayers) el.spotlightPlayers.textContent = playerLabel;
-
-    const meta = GAME_METADATA[gameId];
-    if (meta && meta.bannerBg && el.heroSpotlightBg) {
-      el.heroSpotlightBg.style.background = meta.bannerBg;
+    if (el.heroSpotlight) el.heroSpotlight.style.setProperty('--tone', game.tone);
+    if (el.spotlightTitle) el.spotlightTitle.textContent = game.title;
+    if (el.spotlightDesc) el.spotlightDesc.textContent = game.tagline || game.description;
+    if (el.spotlightMeta) el.spotlightMeta.textContent = formatMeta(game);
+    if (el.spotlightArt) {
+      el.spotlightArt.innerHTML = `
+        <div class="hero-box">
+          ${coverMarkup(game)}
+          <div class="hero-box-side"></div>
+        </div>
+      `;
     }
 
-    // ドットのアクティブ更新
-    if (el.spotlightDots) {
-      const dots = el.spotlightDots.querySelectorAll('.spotlight-dot');
-      dots.forEach((dot, idx) => {
-        dot.classList.toggle('active', idx === spotlightState.currentIndex);
+    // 切り替え時のフェードを再生し直す
+    [el.spotlightCopy, el.spotlightArt].forEach(node => {
+      if (!node) return;
+      node.classList.remove('is-entering');
+      void node.offsetWidth;
+      node.classList.add('is-entering');
+    });
+
+    if (el.spotlightNav) {
+      el.spotlightNav.querySelectorAll('.hero-nav-item').forEach((item, idx) => {
+        item.classList.toggle('active', idx === spotlightState.currentIndex);
       });
     }
 
-    // スポットライトボタンのイベント割り当て
     if (el.spotlightPlayBtn) {
       el.spotlightPlayBtn.onclick = () => {
         SoundFx.playClick();
@@ -1050,9 +1061,9 @@
 
     SoundFx.playModalOpen();
 
-    if (el.ruleModalIcon) el.ruleModalIcon.textContent = game.icon || '🎲';
-    if (el.ruleModalTitle) el.ruleModalTitle.textContent = game.name;
-    if (el.ruleModalCategory) el.ruleModalCategory.textContent = `${game.category} • ${game.playTime}`;
+    if (el.ruleModalIcon) el.ruleModalIcon.innerHTML = coverMarkup(game);
+    if (el.ruleModalTitle) el.ruleModalTitle.textContent = game.title;
+    if (el.ruleModalCategory) el.ruleModalCategory.textContent = formatMeta(game);
 
     const rulesData = game.detailedRules || {};
     const rulesListHtml = (rulesData.rules || [])
@@ -1061,32 +1072,35 @@
 
     if (el.ruleModalBody) {
       el.ruleModalBody.innerHTML = `
-        <div class="rule-block">
-          <h4 class="rule-block-title">ゲーム概要</h4>
+        <section class="rule-block">
+          <h4 class="rule-block-title">概要</h4>
           <p class="rule-block-text">${rulesData.overview || game.description || ''}</p>
-        </div>
+        </section>
 
-        <div class="rule-block">
-          <h4 class="rule-block-title">基本ルール & 遊び方</h4>
-          <ul class="rule-list-items">
-            ${rulesListHtml}
-          </ul>
-        </div>
+        ${rulesListHtml ? `
+          <section class="rule-block">
+            <h4 class="rule-block-title">遊び方</h4>
+            <ol class="rule-list-items">
+              ${rulesListHtml}
+            </ol>
+          </section>
+        ` : ''}
 
         ${rulesData.winCondition ? `
-          <div class="rule-highlight-box win">
-            <div class="highlight-title">勝利条件</div>
-            <div class="highlight-text">${rulesData.winCondition}</div>
-          </div>
+          <section class="rule-block">
+            <h4 class="rule-block-title">勝利条件</h4>
+            <p class="rule-block-text">${rulesData.winCondition}</p>
+          </section>
         ` : ''}
 
         ${rulesData.proTip ? `
-          <div class="rule-highlight-box tip">
-            <div class="highlight-title">勝利へのアドバイス</div>
-            <div class="highlight-text">${rulesData.proTip}</div>
-          </div>
+          <section class="rule-block">
+            <h4 class="rule-block-title">コツ</h4>
+            <p class="rule-block-text">${rulesData.proTip}</p>
+          </section>
         ` : ''}
       `;
+      el.ruleModalBody.scrollTop = 0;
     }
 
     if (el.ruleModal) el.ruleModal.classList.remove('hidden');
@@ -1101,9 +1115,11 @@
   if (el.rulePlayNowBtn) {
     el.rulePlayNowBtn.addEventListener('click', () => {
       SoundFx.playClick();
+      // closeRuleModal() が currentModalGameId を消すので先に控えておく
+      const gameId = currentModalGameId;
       closeRuleModal();
-      if (currentModalGameId) {
-        autoJoinGame(currentModalGameId, 'lobby');
+      if (gameId) {
+        autoJoinGame(gameId, 'lobby');
       }
     });
   }
@@ -1150,7 +1166,7 @@
             <h5>${ach.title}</h5>
             <p>${ach.desc}</p>
           </div>
-          <div class="ach-status">${isUnlocked ? 'アンロック済 ✨' : '未解除 🔒'}</div>
+          <div class="ach-status">${isUnlocked ? '達成' : '未達成'}</div>
         `;
         el.achievementsList.appendChild(item);
       });
@@ -1204,30 +1220,23 @@
   }
 
   // ==========================================
-  // 9. フィルター・ソート・検索イベント
+  // 9. フィルター・検索イベント
   // ==========================================
-  // プレイスタイル区分タブ
-  if (el.playerFilterTabs) {
-    el.playerFilterTabs.querySelectorAll('.filter-tab').forEach(tab => {
-      tab.addEventListener('click', () => {
-        SoundFx.playClick();
-        el.playerFilterTabs.querySelectorAll('.filter-tab').forEach(t => t.classList.remove('active'));
-        tab.classList.add('active');
-        filterState.playerType = tab.dataset.player;
-        renderCatalog();
+  function setLibraryTab(filter) {
+    filterState.tab = filter;
+    if (el.libraryTabs) {
+      el.libraryTabs.querySelectorAll('.library-tab').forEach(t => {
+        t.classList.toggle('active', t.dataset.filter === filter);
       });
-    });
+    }
+    renderCatalog();
   }
 
-  // ジャンルチップス
-  if (el.genreChipsScroll) {
-    el.genreChipsScroll.querySelectorAll('.genre-chip').forEach(chip => {
-      chip.addEventListener('click', () => {
+  if (el.libraryTabs) {
+    el.libraryTabs.querySelectorAll('.library-tab').forEach(tab => {
+      tab.addEventListener('click', () => {
         SoundFx.playClick();
-        el.genreChipsScroll.querySelectorAll('.genre-chip').forEach(c => c.classList.remove('active'));
-        chip.classList.add('active');
-        filterState.genre = chip.dataset.genre;
-        renderCatalog();
+        setLibraryTab(tab.dataset.filter);
       });
     });
   }
@@ -1236,29 +1245,6 @@
   if (el.gameSearchInput) {
     el.gameSearchInput.addEventListener('input', (e) => {
       filterState.searchQuery = e.target.value;
-      if (el.searchClearBtn) {
-        el.searchClearBtn.classList.toggle('hidden', !filterState.searchQuery);
-      }
-      renderCatalog();
-    });
-  }
-
-  // 検索クリアボタン
-  if (el.searchClearBtn) {
-    el.searchClearBtn.addEventListener('click', () => {
-      SoundFx.playClick();
-      if (el.gameSearchInput) el.gameSearchInput.value = '';
-      filterState.searchQuery = '';
-      el.searchClearBtn.classList.add('hidden');
-      renderCatalog();
-    });
-  }
-
-  // ソートセレクター
-  if (el.sortSelector) {
-    el.sortSelector.addEventListener('change', (e) => {
-      SoundFx.playClick();
-      filterState.sortBy = e.target.value;
       renderCatalog();
     });
   }
@@ -1267,26 +1253,9 @@
   if (el.resetFilterBtn) {
     el.resetFilterBtn.addEventListener('click', () => {
       SoundFx.playClick();
-      filterState.playerType = 'all';
-      filterState.genre = 'all';
       filterState.searchQuery = '';
-      filterState.sortBy = 'featured';
-
       if (el.gameSearchInput) el.gameSearchInput.value = '';
-      if (el.searchClearBtn) el.searchClearBtn.classList.add('hidden');
-      if (el.sortSelector) el.sortSelector.value = 'featured';
-
-      if (el.playerFilterTabs) {
-        el.playerFilterTabs.querySelectorAll('.filter-tab').forEach(t => {
-          t.classList.toggle('active', t.dataset.player === 'all');
-        });
-      }
-      if (el.genreChipsScroll) {
-        el.genreChipsScroll.querySelectorAll('.genre-chip').forEach(c => {
-          c.classList.toggle('active', c.dataset.genre === 'all');
-        });
-      }
-      renderCatalog();
+      setLibraryTab('all');
     });
   }
 
@@ -1311,8 +1280,8 @@
     if (el.lobbyModal) el.lobbyModal.classList.add('hidden');
 
     if (el.matchStatusBadge) {
-      el.matchStatusBadge.textContent = '🔍 相手を検索中…';
-      el.matchStatusBadge.style.color = '#38bdf8';
+      el.matchStatusBadge.textContent = '相手を検索中…';
+      el.matchStatusBadge.style.color = '#9fb4c8';
     }
     showGlobalToast('部屋に接続中...');
 
@@ -1327,7 +1296,7 @@
 
     state.peer.on('open', () => {
       if (el.networkStatus) {
-        el.networkStatus.textContent = '🟢 オンライン';
+        el.networkStatus.textContent = 'オンライン';
         el.networkStatus.classList.add('online');
       }
 
@@ -1345,7 +1314,7 @@
         sendPlatformPacket({ _platform: true, type: 'name_sync', name: state.localName });
         updatePlayersBar();
         SoundFx.playGameStart();
-        showGlobalToast('🎉 対戦相手と合流しました！ゲーム開始！');
+        showGlobalToast('対戦相手と合流しました。ゲーム開始');
         registeredPlayerJoinedListeners.forEach(listener => listener());
       });
 
@@ -1372,7 +1341,10 @@
           becomeHost(gameId, roomCode);
         }
       } else {
-        if (el.networkStatus) el.networkStatus.textContent = 'エラー: ' + err.type;
+        if (el.networkStatus) {
+          el.networkStatus.textContent = '接続エラー';
+          el.networkStatus.classList.remove('online');
+        }
       }
     });
   }
@@ -1389,11 +1361,11 @@
 
     state.peer.on('open', () => {
       if (el.networkStatus) {
-        el.networkStatus.textContent = '🟢 オンライン';
+        el.networkStatus.textContent = 'オンライン';
         el.networkStatus.classList.add('online');
       }
       updatePlayersBar();
-      showGlobalToast('🏠 部屋で待機中！友達が入ってきたら自動で開始します');
+      showGlobalToast('部屋で待機中です。相手が入ると自動で始まります');
     });
 
     state.peer.on('connection', (connection) => {
@@ -1418,7 +1390,7 @@
     if (!game) return;
     selectedGameId = gameId;
 
-    if (el.lobbyGameTitle) el.lobbyGameTitle.textContent = `${game.icon || ''} ${game.name}`;
+    if (el.lobbyGameTitle) el.lobbyGameTitle.textContent = game.title;
     if (el.roomCreatedInfo) el.roomCreatedInfo.classList.add('hidden');
     if (el.createRoomBtn) el.createRoomBtn.disabled = false;
     if (el.lobbyModal) el.lobbyModal.classList.remove('hidden');
@@ -1475,7 +1447,7 @@
     const url = getInviteUrl(selectedGameId, state.roomCode);
     navigator.clipboard.writeText(url).then(() => {
       ProfileManager.unlockAchievement('share_link');
-      showGlobalToast('📋 招待URLをコピーしました！友達に送信してください');
+      showGlobalToast('招待URLをコピーしました');
     });
   }
 
@@ -1520,12 +1492,15 @@
   // 12. WebRTC P2P (PeerJS) コア
   // ==========================================
   function initPeer(customId = null) {
-    if (el.networkStatus) el.networkStatus.textContent = '接続待機中...';
+    if (el.networkStatus) {
+      el.networkStatus.textContent = '接続中';
+      el.networkStatus.classList.remove('online');
+    }
     state.peer = customId ? new Peer(customId) : new Peer();
 
     state.peer.on('open', () => {
       if (el.networkStatus) {
-        el.networkStatus.textContent = '🟢 オンライン';
+        el.networkStatus.textContent = 'オンライン';
         el.networkStatus.classList.add('online');
       }
     });
@@ -1538,7 +1513,7 @@
     state.peer.on('error', (err) => {
       console.error('Peer error:', err);
       if (el.networkStatus) {
-        el.networkStatus.textContent = 'エラー: ' + err.type;
+        el.networkStatus.textContent = '接続エラー';
         el.networkStatus.classList.remove('online');
       }
     });
@@ -1556,7 +1531,7 @@
 
       updatePlayersBar();
       SoundFx.playGameStart();
-      showGlobalToast('🎉 対戦相手が合流しました！ゲーム開始！');
+      showGlobalToast('対戦相手が合流しました。ゲーム開始');
 
       registeredPlayerJoinedListeners.forEach(listener => listener());
     });
@@ -1612,7 +1587,7 @@
     registeredPlayerJoinedListeners.clear();
 
     state.activeGame = game;
-    if (el.activeGameTitle) el.activeGameTitle.textContent = `${game.icon || ''} ${game.name}`;
+    if (el.activeGameTitle) el.activeGameTitle.textContent = game.title;
 
     el.catalogView.classList.remove('active');
     el.gameView.classList.add('active');
@@ -1660,17 +1635,17 @@
   function updatePlayersBar() {
     if (state.isHost) {
       if (el.p1NameDisplay) el.p1NameDisplay.textContent = `${state.localName} (あなた)`;
-      if (el.p2NameDisplay) el.p2NameDisplay.textContent = state.isConnected ? state.remoteName : `⏳ 待機中 (合言葉: ${state.roomCode})`;
+      if (el.p2NameDisplay) el.p2NameDisplay.textContent = state.isConnected ? state.remoteName : `待機中 (合言葉: ${state.roomCode})`;
       if (el.matchStatusBadge) {
-        el.matchStatusBadge.textContent = state.isConnected ? '🟢 対戦中' : '⏳ 友達待機中';
-        el.matchStatusBadge.style.color = state.isConnected ? '#4ade80' : '#f59e0b';
+        el.matchStatusBadge.textContent = state.isConnected ? '対戦中' : '相手を待っています';
+        el.matchStatusBadge.style.color = state.isConnected ? '#8fc79a' : '#d9b56a';
       }
     } else {
       if (el.p1NameDisplay) el.p1NameDisplay.textContent = state.remoteName;
       if (el.p2NameDisplay) el.p2NameDisplay.textContent = `${state.localName} (あなた)`;
       if (el.matchStatusBadge) {
-        el.matchStatusBadge.textContent = state.isConnected ? '🟢 対戦中' : '⏳ 接続中…';
-        el.matchStatusBadge.style.color = state.isConnected ? '#4ade80' : '#38bdf8';
+        el.matchStatusBadge.textContent = state.isConnected ? '対戦中' : '接続中…';
+        el.matchStatusBadge.style.color = state.isConnected ? '#8fc79a' : '#9fb4c8';
       }
     }
   }
@@ -1760,5 +1735,6 @@
   // 14. 初期化起動
   // ==========================================
   ProfileManager.updateHeaderDisplay();
+  SoundFx.syncButton();
   initPeer();
 })();

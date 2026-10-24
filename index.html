@@ -3,11 +3,12 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-  <title>BOARD ARENA - オンライン対戦ボードゲームプラットフォーム</title>
-  <!-- Google Fonts: Plus Jakarta Sans & Noto Sans JP -->
+  <meta name="theme-color" content="#0e0e0f">
+  <title>BOARD ARENA</title>
+  <!-- Google Fonts: Marcellus (欧文タイトル) & Zen Kaku Gothic New (本文) -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;600;700;800&family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Marcellus&family=Zen+Kaku+Gothic+New:wght@400;500;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="style.css">
   <!-- PeerJS 公式CDN (WebRTC P2P) -->
   <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
@@ -16,104 +17,89 @@
 </head>
 <body>
   <div id="app" class="app-container">
-    
-    <!-- プラットフォーム共通ヘッダー (AAA Minimal White) -->
+
+    <!-- プラットフォーム共通ヘッダー -->
     <header class="app-header">
-      <div class="header-left">
-        <h1 class="platform-logo" id="logo-btn">
-          <span class="logo-badge">BA</span>
-          <span class="logo-text">BOARD ARENA</span>
-        </h1>
-      </div>
-      <div class="header-right">
-        <!-- サウンドトグル -->
-        <button id="sfx-toggle-btn" class="icon-tool-btn" title="サウンドのON/OFF">🔊</button>
-        <!-- プロフィール＆実績 -->
-        <button id="profile-btn" class="profile-badge-btn" title="戦績・プロフィール">
-          <span id="header-avatar" class="user-avatar-icon">👑</span>
-          <span id="header-username" class="header-name-text">プレイヤー</span>
-          <span id="header-trophy-count" class="trophy-pill">🏆 0</span>
-        </button>
-        <div id="network-status" class="status-pill"><span class="status-dot"></span>オンライン</div>
+      <div class="wrap header-inner">
+        <h1 class="wordmark" id="logo-btn">BOARD ARENA</h1>
+        <div class="header-right">
+          <span id="network-status" class="net-status">接続中</span>
+          <button id="sfx-toggle-btn" class="icon-btn" title="効果音" aria-label="効果音のオン・オフ">
+            <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+              <path d="M4 9.5h3.5L12 5.5v13l-4.5-4H4z" fill="currentColor"/>
+              <path class="sfx-wave" d="M15.5 9a4.2 4.2 0 0 1 0 6M18 6.5a7.8 7.8 0 0 1 0 11" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+              <path class="sfx-mute" d="M16 9.5l5 5M21 9.5l-5 5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+            </svg>
+          </button>
+          <button id="profile-btn" class="profile-btn" title="プロフィール">
+            <span id="header-avatar" class="profile-initial"></span>
+            <span id="header-username" class="profile-name">プレイヤー</span>
+          </button>
+        </div>
       </div>
     </header>
 
     <!-- 1. ゲーム選択ポータル (カタログ画面) -->
     <section id="catalog-view" class="view-panel active">
-      
-      <!-- AAA Featured Hero Spotlight (シネマティック・ホワイトショーケース) -->
-      <div class="hero-spotlight-card" id="hero-spotlight">
-        <div class="hero-spotlight-bg" id="hero-spotlight-bg"></div>
-        <div class="hero-spotlight-content">
-          <div class="hero-tags-row">
-            <span class="spotlight-tag" id="spotlight-tag">FEATURED</span>
-            <span class="spotlight-rating" id="spotlight-rating">★ 4.9</span>
-            <span class="spotlight-players" id="spotlight-players">2〜8人</span>
-          </div>
-          <h2 class="spotlight-title" id="spotlight-title">3Dスカル (Skull)</h2>
-          <p class="spotlight-desc" id="spotlight-desc">カジノテーブルで囲む至高の心理戦。手札を掴んで場に出し、めくって駆け引きを行う本格卓上3Dスカル。</p>
-          <div class="spotlight-actions">
-            <button id="spotlight-play-btn" class="btn btn-primary btn-lg spotlight-play-btn">今すぐプレイ</button>
-            <button id="spotlight-rule-btn" class="btn btn-secondary btn-lg">ルール解説</button>
-          </div>
-        </div>
-        <div class="hero-spotlight-visual">
-          <div class="hero-giant-icon" id="spotlight-icon">💀</div>
-        </div>
-        <!-- インジケータードット -->
-        <div class="spotlight-dots" id="spotlight-dots"></div>
-      </div>
 
-      <!-- AAA フィルター＆ソートコントロールバー -->
-      <div class="filter-controls-bar">
-        <!-- 上段: プレイスタイル区分 (Solo / Duo / Multi) -->
-        <div class="player-filter-tabs" id="player-filter-tabs">
-          <button class="filter-tab active" data-player="all">すべて <span class="tab-count" id="count-all">16</span></button>
-          <button class="filter-tab" data-player="solo">ソロ対戦 <span class="tab-count" id="count-solo">16</span></button>
-          <button class="filter-tab" data-player="duo">1 vs 1 <span class="tab-count" id="count-duo">16</span></button>
-          <button class="filter-tab" data-player="multi">マルチプレイ <span class="tab-count" id="count-multi">3</span></button>
-        </div>
-
-        <!-- 中段: ジャンルタグチップス -->
-        <div class="genre-chips-scroll" id="genre-chips-scroll">
-          <button class="genre-chip active" data-genre="all">全ジャンル</button>
-          <button class="genre-chip" data-genre="brain">ストラテジー</button>
-          <button class="genre-chip" data-genre="dice">ダイス・カード</button>
-          <button class="genre-chip" data-genre="bluff">心理戦・ブラフ</button>
-          <button class="genre-chip" data-genre="action">3Dアクション</button>
-          <button class="genre-chip" data-genre="puzzle">パズル・海戦</button>
-        </div>
-
-        <!-- 下段: リアルタイム検索 & ソート選択 -->
-        <div class="search-sort-row">
-          <div class="search-input-wrapper">
-            <span class="search-icon">🔍</span>
-            <input type="text" id="game-search-input" placeholder="ゲーム名やキーワードで検索..." maxlength="20">
-            <button id="search-clear-btn" class="search-clear-btn hidden">✕</button>
+      <!-- 注目タイトル -->
+      <div class="hero" id="hero-spotlight">
+        <div class="wrap hero-inner">
+          <div class="hero-copy" id="spotlight-copy">
+            <p class="hero-eyebrow">注目のタイトル</p>
+            <h2 class="hero-title" id="spotlight-title"></h2>
+            <p class="hero-desc" id="spotlight-desc"></p>
+            <p class="hero-meta" id="spotlight-meta"></p>
+            <div class="hero-actions">
+              <button id="spotlight-play-btn" class="btn btn-primary btn-lg">プレイ</button>
+              <button id="spotlight-rule-btn" class="btn btn-ghost btn-lg">遊び方</button>
+            </div>
           </div>
-          <div class="sort-selector-wrapper">
-            <span class="sort-label">並び替え:</span>
-            <select id="sort-selector" class="sort-dropdown">
-              <option value="featured">おすすめ順</option>
-              <option value="newest">新着順</option>
-              <option value="rating">高評価順</option>
-              <option value="time">プレイ時間順</option>
-              <option value="title">名前順</option>
-            </select>
-          </div>
+          <div class="hero-art" id="spotlight-art"></div>
+        </div>
+        <div class="wrap">
+          <ol class="hero-nav" id="spotlight-nav"></ol>
         </div>
       </div>
 
-      <!-- ゲームカードグリッド -->
-      <div class="catalog-grid" id="games-grid">
-        <!-- ゲームコンポーネントカードが自動的にここに追加されます -->
+      <!-- ゲーム一覧 -->
+      <div class="wrap library">
+        <div class="library-head">
+          <h2 class="library-title">すべてのゲーム <span class="library-count" id="game-count"></span></h2>
+          <label class="search-field">
+            <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true">
+              <circle cx="10.5" cy="10.5" r="6" fill="none" stroke="currentColor" stroke-width="1.6"/>
+              <path d="M15 15l5 5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+            </svg>
+            <input type="search" id="game-search-input" placeholder="検索" maxlength="20" autocomplete="off">
+          </label>
+        </div>
+
+        <nav class="library-tabs" id="library-tabs">
+          <button class="library-tab active" data-filter="all">すべて</button>
+          <button class="library-tab" data-filter="multi">大人数</button>
+          <button class="library-tab" data-filter="brain">ストラテジー</button>
+          <button class="library-tab" data-filter="bluff">心理戦</button>
+          <button class="library-tab" data-filter="dice">ダイス</button>
+          <button class="library-tab" data-filter="puzzle">推理・パズル</button>
+          <button class="library-tab" data-filter="action">アクション</button>
+        </nav>
+
+        <div class="library-grid" id="games-grid">
+          <!-- ゲームタイルが自動的にここに追加されます -->
+        </div>
+        <div id="no-results-msg" class="no-results hidden">
+          <p>該当するゲームはありません。</p>
+          <button id="reset-filter-btn" class="btn-subtle">条件をリセット</button>
+        </div>
       </div>
-      <div id="no-results-msg" class="no-results-card hidden">
-        <span class="no-results-icon">🛸</span>
-        <h3>該当するゲームが見つかりませんでした</h3>
-        <p>検索ワードやフィルター条件を変更してお試しください。</p>
-        <button id="reset-filter-btn" class="btn btn-sm btn-primary">フィルターをリセット</button>
-      </div>
+
+      <footer class="site-footer">
+        <div class="wrap footer-inner">
+          <span class="wordmark wordmark-sm">BOARD ARENA</span>
+          <span>URLを送るだけで、ブラウザ同士で直接対戦できます。</span>
+        </div>
+      </footer>
     </section>
 
     <!-- 2. ゲームプレイ画面 (ステージ：無駄を省きページ幅を最大限活用) -->
@@ -154,36 +140,38 @@
       <div id="game-mount-point" class="game-mount-point"></div>
     </section>
 
-    <!-- AAA ルール解説モーダル -->
+    <!-- ゲーム詳細・遊び方モーダル -->
     <div id="rule-modal" class="modal-backdrop hidden">
       <div class="modal-card rule-modal-card">
-        <div class="modal-header-row">
-          <div class="rule-title-group">
-            <span class="rule-icon" id="rule-modal-icon">🎲</span>
-            <div>
-              <h2 id="rule-modal-title">ゲーム名</h2>
-              <span class="card-badge" id="rule-modal-category">カテゴリ</span>
-            </div>
+        <div class="rule-head">
+          <div class="rule-cover" id="rule-modal-icon"></div>
+          <div class="rule-head-text">
+            <h2 id="rule-modal-title">ゲーム名</h2>
+            <p class="rule-meta" id="rule-modal-category"></p>
           </div>
-          <button id="close-rule-modal-btn" class="btn-close-icon">✕</button>
+          <button id="close-rule-modal-btn" class="btn-close-icon" aria-label="閉じる">
+            <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+          </button>
         </div>
         <div class="rule-modal-body" id="rule-modal-body">
           <!-- ルール詳細が動的に挿入されます -->
         </div>
         <div class="modal-footer rule-footer">
-          <button id="rule-play-now-btn" class="btn btn-primary btn-block">今すぐプレイ</button>
+          <button id="rule-play-now-btn" class="btn btn-primary btn-block btn-lg">プレイ</button>
         </div>
       </div>
     </div>
 
-    <!-- AAA プロフィール＆実績モーダル -->
+    <!-- プロフィール＆実績モーダル -->
     <div id="profile-modal" class="modal-backdrop hidden">
       <div class="modal-card profile-modal-card">
         <div class="modal-header-row">
-          <h2 class="modal-title">プレイヤープロフィール & 実績</h2>
-          <button id="close-profile-modal-btn" class="btn-close-icon">✕</button>
+          <h2 class="modal-title">プロフィール</h2>
+          <button id="close-profile-modal-btn" class="btn-close-icon" aria-label="閉じる">
+            <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+          </button>
         </div>
-        
+
         <!-- プロフィール編集エリア -->
         <div class="profile-summary-box">
           <div class="avatar-selection-row">
@@ -201,21 +189,21 @@
             </div>
           </div>
           <div class="name-edit-group">
-            <label class="input-lbl">プレイヤー名</label>
+            <label class="input-lbl" for="modal-username-input">プレイヤー名</label>
             <input type="text" id="modal-username-input" class="modal-input" maxlength="12">
           </div>
         </div>
 
         <!-- 戦績サマリー -->
         <div class="stats-counters-grid">
-          <div class="stat-pill"><span class="stat-val" id="stat-matches">0</span><span class="stat-lbl">総対戦数</span></div>
-          <div class="stat-pill"><span class="stat-val" id="stat-wins">0</span><span class="stat-lbl">通算勝利</span></div>
+          <div class="stat-pill"><span class="stat-val" id="stat-matches">0</span><span class="stat-lbl">対戦数</span></div>
+          <div class="stat-pill"><span class="stat-val" id="stat-wins">0</span><span class="stat-lbl">勝利</span></div>
           <div class="stat-pill"><span class="stat-val" id="stat-winrate">0%</span><span class="stat-lbl">勝率</span></div>
         </div>
 
         <!-- 実績 (Achievements) 一覧 -->
         <div class="achievements-section">
-          <h3 class="ach-title">アンロック実績</h3>
+          <h3 class="ach-title">実績</h3>
           <div class="achievements-list" id="achievements-list">
             <!-- 実績バッジが自動生成されます -->
           </div>
@@ -231,8 +219,8 @@
 
         <!-- 部屋を作る -->
         <div class="lobby-action-section">
-          <button id="create-room-btn" class="btn btn-primary btn-block btn-lg">部屋を作成する (Host)</button>
-          
+          <button id="create-room-btn" class="btn btn-primary btn-block btn-lg">部屋を作る</button>
+
           <div id="room-created-info" class="room-info-card hidden">
             <div class="room-code-tag">合言葉: <span id="display-room-code">----</span></div>
             <p class="guide-text">URLを相手に送るだけで、クリックして即座に対戦が開始されます。</p>
