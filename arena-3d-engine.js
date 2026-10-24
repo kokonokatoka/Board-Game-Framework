@@ -38,11 +38,12 @@
     catan_robber: 'assets/models/catan_robber.glb',
     dominion_crown: 'assets/models/dominion_crown.glb',
     dominion_coin: 'assets/models/dominion_coin.glb',
-    dominion_shield: 'assets/models/dominion_shield.glb'
+    dominion_shield: 'assets/models/dominion_shield.glb',
+    geister_ghost: 'assets/models/geister_ghost.glb'
   };
 
-  // 既に独自3D実装を持つ6ゲームはラッパー対象外
-  const NATIVE_3D_GAMES = new Set(['skull', 'gobblet', 'block_battle_3d', 'splendor', 'catan', 'dominion']);
+  // 既に独自3D実装を持つ7ゲームはラッパー対象外
+  const NATIVE_3D_GAMES = new Set(['skull', 'gobblet', 'block_battle_3d', 'splendor', 'catan', 'dominion', 'geister']);
 
   const glbCache = new Map();
   let threeLoadPromise = null;
