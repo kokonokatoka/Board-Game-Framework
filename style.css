@@ -1215,9 +1215,28 @@ button {
   .rule-modal-body { padding: 0 20px; }
   .rule-footer { padding: 16px 20px 20px; }
 
-  .game-compact-bar { padding: 8px 12px; flex-direction: column; align-items: stretch; }
-  .gcb-left, .gcb-center, .gcb-right { justify-content: space-between; }
-  .game-mount-point { padding: 12px; }
+  #game-view.view-panel { padding: 10px 10px 24px; }
+  .game-compact-bar { padding: 10px 12px; flex-direction: column; align-items: stretch; gap: 10px; }
+  .gcb-left, .gcb-center, .gcb-right { flex-wrap: wrap; justify-content: flex-start; gap: 8px; min-width: 0; }
+  .gcb-center { font-size: 12px; }
+  .p-name {
+    display: inline-block;
+    max-width: 42vw;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    vertical-align: bottom;
+  }
+  .emote-inline-group {
+    width: 100%;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+  .emote-inline-group::-webkit-scrollbar { display: none; }
+  .emote-btn { flex: 0 0 auto; white-space: nowrap; }
+  .gcb-right .btn { flex: 1 1 auto; }
+  .game-mount-point { padding: 8px; }
 }
 
 @media (hover: none) {
@@ -1235,4 +1254,149 @@ button {
     transform: scaleX(1);
   }
   .tile-art, .tile .cover { transition: none; }
+}
+
+/* ===================================================
+   11. GAME HUD
+   2D盤面ゲーム (3D表示の13作) の操作パネルを共通の見た目にそろえる。
+   各ゲームが注入する CSS より優先させるため #game-mount-point から指定する。
+   =================================================== */
+#game-mount-point :is(
+  .othello-status-bar, .gomoku-status-bar, .c4-status-bar, .chk-status-bar, .qd-status-bar,
+  .qrt-status-bar, .mancala-status-bar, .blokus-top-bar, .dab-status-bar, .bs-status-bar,
+  .yct-status-bar, .cn-header-panel, .qd-action-bar, .bs-placement-bar, .cn-clue-banner,
+  .cn-log-panel, .blokus-piece-controls, .blokus-tray-wrapper, .qrt-pool-card,
+  .yct-score-sheet-card, .active-piece-box
+) {
+  background: var(--bg-raised) !important;
+  border: 1px solid var(--line) !important;
+  border-radius: 6px !important;
+  box-shadow: none !important;
+  color: var(--text);
+  font-family: var(--font-ui);
+}
+
+/* 手番表示は色付きの枠をやめ、文字だけで示す */
+#game-mount-point :is(.turn-badge, .cn-turn-indicator) {
+  background: transparent !important;
+  border: 0 !important;
+  box-shadow: none !important;
+  padding-left: 0 !important;
+  color: var(--text) !important;
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+/* CPU 対戦の切り替えなど */
+#game-mount-point [class*="-mode-btn"] {
+  background: transparent !important;
+  border: 1px solid var(--line-strong) !important;
+  border-radius: 4px !important;
+  box-shadow: none !important;
+  color: var(--text-2) !important;
+  font: 500 12px/1.4 var(--font-ui) !important;
+  letter-spacing: 0.04em;
+  padding: 5px 12px !important;
+}
+#game-mount-point [class*="-mode-btn"]:hover {
+  color: var(--text) !important;
+  border-color: rgba(255, 255, 255, 0.34) !important;
+}
+
+/* 得点・残り数の小さな表示。プレイヤーの色は左の細い線で示す */
+#game-mount-point :is(.sc-item, .score-pill, .blk-sc, .wall-badge, .cn-score-card, .bs-ship-counter, .yct-rolls-left) {
+  background: var(--surface) !important;
+  border: 1px solid var(--line) !important;
+  border-radius: 3px !important;
+  box-shadow: none !important;
+  color: var(--text) !important;
+  font-weight: 500;
+}
+#game-mount-point :is(.sc-item.black) { border-left: 3px solid #0b0b0b !important; }
+#game-mount-point :is(.sc-item.white) { border-left: 3px solid #dcd6ca !important; }
+#game-mount-point :is(.score-pill.p1-pill, .wall-badge.p1-badge, .cn-score-card.blue-card) { border-left: 3px solid #4f78a6 !important; }
+#game-mount-point :is(.score-pill.p2-pill, .wall-badge.p2-badge, .cn-score-card.red-card) { border-left: 3px solid #a5473b !important; }
+#game-mount-point .blk-sc.p1 { border-left: 3px solid #6f5bb0 !important; }
+#game-mount-point .blk-sc.p2 { border-left: 3px solid #cf7a2b !important; }
+#game-mount-point .cn-score-card.active-turn { border-color: var(--line-strong) !important; background: var(--surface-hover) !important; }
+#game-mount-point .score-count { color: var(--text) !important; }
+#game-mount-point :is(.sc-vs, .blk-sc-vs) { color: var(--text-3) !important; }
+
+/* 補足の説明文 */
+#game-mount-point :is(.gomoku-rule, .mancala-hint, .placement-hint, .keep-guide, .pool-header, .tray-title, .qd-hint) {
+  color: var(--text-3) !important;
+  font-weight: 500;
+}
+
+/* 勝敗の結果 */
+#game-mount-point [class$="-result-banner"]:not(.hidden),
+#game-mount-point [class*="-result-banner "]:not(.hidden) {
+  background: var(--bg-raised) !important;
+  border: 1px solid var(--line-strong) !important;
+  border-radius: 6px !important;
+  box-shadow: none !important;
+  color: var(--text) !important;
+}
+
+/* 入力欄 (コードネームのヒント入力など) */
+#game-mount-point :is(.clue-input, .clue-select) {
+  background: var(--bg-sunken) !important;
+  border: 1px solid var(--line-strong) !important;
+  border-radius: 4px !important;
+  color: var(--text) !important;
+  font-family: var(--font-ui);
+}
+#game-mount-point .log-entry { color: var(--text-2); border-color: var(--line) !important; }
+#game-mount-point .log-red { color: #c97a6f !important; }
+#game-mount-point .log-blue { color: #7f9fc6 !important; }
+
+/* ヨット: 3D トレイを包む枠と得点表 */
+#game-mount-point .yct-dice-tray {
+  background: transparent !important;
+  border: 0 !important;
+  box-shadow: none !important;
+  padding: 0 !important;
+}
+#game-mount-point .yct-score-table :is(th, td) { border-bottom-color: var(--line) !important; color: var(--text-2); }
+#game-mount-point .yct-score-table th:first-child,
+#game-mount-point .yct-score-table td:first-child { color: var(--text); }
+#game-mount-point :is(.p1-header, .p2-header) { color: var(--text) !important; }
+#game-mount-point .total-row { background: var(--surface) !important; }
+#game-mount-point .score-cell.selectable {
+  background: rgba(226, 184, 103, 0.12) !important;
+  color: #e2b867 !important;
+}
+#game-mount-point .score-cell.selectable:hover { background: rgba(226, 184, 103, 0.24) !important; }
+
+/* クアルト: 手持ちのコマを 3D と同じ木の色に */
+#game-mount-point .qrt-piece { box-shadow: 0 2px 6px rgba(0, 0, 0, 0.45) !important; }
+#game-mount-point .qrt-piece.light { background: #d2b085 !important; border: 1px solid #a8835a !important; }
+#game-mount-point .qrt-piece.dark { background: #7a3f28 !important; border: 1px solid #4a2214 !important; }
+#game-mount-point .qrt-piece.hollow::after { background: #1a110b !important; }
+#game-mount-point .qrt-piece.selected { box-shadow: 0 0 0 2px #e2b867 !important; }
+#game-mount-point .active-piece-box { color: var(--text-2) !important; }
+
+/* ブロックス: 手持ちのピース */
+#game-mount-point .tray-card {
+  background: var(--surface) !important;
+  border: 1px solid var(--line) !important;
+  box-shadow: none !important;
+}
+#game-mount-point .tray-card:hover { border-color: var(--line-strong) !important; }
+#game-mount-point .tray-card.active { border-color: #e2b867 !important; background: var(--surface-hover) !important; }
+#game-mount-point .mini-block.on-p1 { background: #6f5bb0 !important; }
+#game-mount-point .mini-block.on-p2 { background: #cf7a2b !important; }
+
+/* ゲーム内の副ボタン (2D の見た目のまま残っていた種類) */
+#game-mount-point :is(.btn-warning, .btn-action, .btn-spymaster) {
+  background: var(--surface) !important;
+  border: 1px solid var(--line-strong) !important;
+  color: var(--text) !important;
+  box-shadow: none !important;
+}
+#game-mount-point :is(.btn-action.active, .act-btn.active) {
+  background: var(--text) !important;
+  color: var(--text-inverse) !important;
+  border-color: var(--text) !important;
 }
