@@ -44,8 +44,8 @@
     deepsea_diver: 'assets/models/deepsea_diver.glb'
   };
 
-  // 既に独自3D実装を持つ8ゲームはラッパー対象外
-  const NATIVE_3D_GAMES = new Set(['skull', 'gobblet', 'block_battle_3d', 'splendor', 'catan', 'dominion', 'geister', 'deep_sea']);
+  // 既に独自実装を持つゲーム（および2D専用のお邪魔者）はラッパー対象外
+  const NATIVE_3D_GAMES = new Set(['skull', 'gobblet', 'block_battle_3d', 'splendor', 'catan', 'dominion', 'geister', 'deep_sea', 'saboteur']);
 
   const glbCache = new Map();
   let threeLoadPromise = null;
